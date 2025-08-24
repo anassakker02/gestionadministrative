@@ -52,6 +52,70 @@ class UserController {
     }
   }
 
+  async create(req, res) {
+    try {
+      const { nom, prenom, role, telephone, adresse, address, email } = req.body;
+
+      // Validation des champs requis
+      if (!nom || !prenom || !role || !email) {
+        return res.status(400).json({
+          message: 'Nom, prenom, role et email sont requis',
+          status: false
+        });
+      }
+
+      // Vérifier si l'email existe déjà
+      const existingUser = await this.collection.where('email', '==', email).get();
+      if (!existingUser.empty) {
+        return res.status(400).json({
+          message: 'Un utilisateur avec cet email existe déjà',
+          status: false
+        });
+      }
+
+      // Générer un mot de passe par défaut (8 caractères aléatoires)
+      const defaultPassword = Math.random().toString(36).slice(-8);
+      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+      // Préparer les données de l'utilisateur
+      const userData = {
+        nom,
+        prenom,
+        email,
+        password: hashedPassword,
+        role,
+        telephone: telephone || null,
+        adresse: adresse || null,
+        address: address || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isActive: true,
+        isFirstLogin: true // Indique que c'est la première connexion
+      };
+
+      // Créer l'utilisateur dans Firestore
+      const userRef = await this.collection.add(userData);
+      const newUser = await userRef.get();
+
+      return res.status(201).json({
+        status: true,
+        message: 'Utilisateur créé avec succès',
+        data: { 
+          id: newUser.id, 
+          ...newUser.data(),
+          defaultPassword: defaultPassword // Retourner le mot de passe par défaut pour l'admin
+        },
+        note: 'L\'utilisateur devra changer son mot de passe lors de sa première connexion'
+      });
+    } catch (error) {
+      return res.status(500).json({
+        message: 'Erreur lors de la création de l\'utilisateur',
+        status: false,
+        error: error.message,
+      });
+    }
+  }
+
   async update(req, res) {
     try {
       const userRef = this.collection.doc(req.params.id);

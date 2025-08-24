@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* YNOV School Management System Color Palette */
+    --background: 0 0% 100%;
+    --foreground: 215 25% 27%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 27%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 27%;
+
+    /* YNOV Turquoise Brand Colors */
+    --primary: 172 82% 55%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 172 82% 45%;
+    --primary-glow: 172 82% 75%;
+
+    --secondary: 210 11% 96%;
+    --secondary-foreground: 215 25% 27%;
+
+    --muted: 210 11% 96%;
+    --muted-foreground: 215 13% 65%;
+
+    --accent: 172 82% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 172 82% 55%;
+
+    --radius: 0.75rem;
+
+    /* Educational Theme Colors */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(172 82% 55%), hsl(172 82% 75%));
+    --gradient-secondary: linear-gradient(135deg, hsl(210 11% 96%), hsl(0 0% 100%));
+    --gradient-hero: linear-gradient(135deg, hsl(172 82% 55%) 0%, hsl(172 82% 45%) 100%);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(172 82% 55% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(172 82% 55% / 0.1), 0 2px 4px -1px hsl(172 82% 55% / 0.06);
+    --shadow-lg: 0 10px 15px -3px hsl(172 82% 55% / 0.1), 0 4px 6px -2px hsl(172 82% 55% / 0.05);
+    --shadow-glow: 0 0 20px hsl(172 82% 55% / 0.3);
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 215 25% 27%;
+    --sidebar-primary: 172 82% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 11% 96%;
+    --sidebar-accent-foreground: 215 25% 27%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 172 82% 55%;
+  }
+
+  .dark {
+    --background: 215 28% 17%;
+    --foreground: 0 0% 100%;
+
+    --card: 215 28% 17%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 215 28% 17%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 172 82% 55%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 172 82% 65%;
+    --primary-glow: 172 82% 45%;
+
+    --secondary: 215 25% 27%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 215 25% 27%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 172 82% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 215 25% 27%;
+    --input: 215 25% 27%;
+    --ring: 172 82% 55%;
+
+    --sidebar-background: 215 32% 20%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 172 82% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 25% 27%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 215 25% 27%;
+    --sidebar-ring: 172 82% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

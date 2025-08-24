@@ -11,7 +11,7 @@ const parentsHandler = require("./parents/routes");
 const relancesHandler = require("./relances/routes");
 const tarifsHandler = require("./tarifs/routes");
 const usersHandler = require("./users/routes");
-
+const authHandler = require("./auth/routes");
 
 
 app.use("/bourses", boursesHandler);
@@ -24,7 +24,7 @@ app.use("/parents", parentsHandler);
 app.use("/relances", relancesHandler);
 app.use("/tarifs", tarifsHandler);
 app.use("/users", usersHandler);
-
+app.use("/auth", authHandler);
 
 
 module.exports = app;
