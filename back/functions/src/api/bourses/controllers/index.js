@@ -1,239 +1,394 @@
-// const Bourse = require('../../classes/Bourse'); // Adjust path if necessary
-const db = require('../../../config/firebase'); // Adjust path if necessary
-const bcrypt = require('bcrypt'); // Add bcrypt import
-// const sendEmail = require('../../../utils/sendmail');
+const Bourse = require('../../../classes/Bourse');
+const db = require('../../../config/firebase');
 
-class UserController {
+class BourseController {
   constructor() {
     this.collection = db.collection('bourses');
   }
 
+  /**
+   * Créer une nouvelle bourse
+   * POST /bourses
+   */
+  async create(req, res) {
+    try {
+      const { nom, pourcentage_remise } = req.body;
 
+      // Validation des données
+      if (!nom || !pourcentage_remise) {
+        return res.status(400).json({
+          status: false,
+          message: 'Le nom et le pourcentage de remise sont requis',
+        });
+      }
+
+      // Validation du pourcentage (doit être entre 0 et 100)
+      if (pourcentage_remise < 0 || pourcentage_remise > 100) {
+        return res.status(400).json({
+          status: false,
+          message: 'Le pourcentage de remise doit être entre 0 et 100',
+        });
+      }
+
+      // Vérifier si une bourse avec le même nom existe déjà
+      const existingBourse = await this.collection
+        .where('nom', '==', nom)
+        .get();
+
+      if (!existingBourse.empty) {
+        return res.status(409).json({
+          status: false,
+          message: 'Une bourse avec ce nom existe déjà',
+        });
+      }
+
+      // Créer la nouvelle bourse
+      const bourseData = {
+        nom: nom.trim(),
+        pourcentage_remise: Number(pourcentage_remise),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const docRef = await this.collection.add(bourseData);
+      const newBourse = await docRef.get();
+
+      return res.status(201).json({
+        status: true,
+        message: 'Bourse créée avec succès',
+        data: {
+          id: newBourse.id,
+          ...newBourse.data(),
+        },
+      });
+    } catch (error) {
+      console.error('Erreur lors de la création de la bourse:', error);
+      return res.status(500).json({
+        status: false,
+        message: 'Erreur interne du serveur',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Récupérer toutes les bourses
+   * GET /bourses
+   */
   async getAll(req, res) {
     try {
-      const users = await this.collection.get();
+      const { page = 1, limit = 10, search } = req.query;
+      const pageNumber = parseInt(page);
+      const limitNumber = parseInt(limit);
 
-      const data = users.docs.map((doc) => ({
+      let query = this.collection.orderBy('createdAt', 'desc');
+
+      // Recherche par nom si le paramètre search est fourni
+      if (search && search.trim()) {
+        query = query.where('nom', '>=', search.trim())
+                    .where('nom', '<=', search.trim() + '\uf8ff');
+      }
+
+      // Pagination
+      const offset = (pageNumber - 1) * limitNumber;
+      const snapshot = await query.limit(limitNumber).offset(offset).get();
+
+      const bourses = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Compter le total des documents pour la pagination
+      const totalSnapshot = await this.collection.get();
+      const total = totalSnapshot.size;
+
+      return res.status(200).json({
+        status: true,
+        data: bourses,
+        pagination: {
+          page: pageNumber,
+          limit: limitNumber,
+          total,
+          totalPages: Math.ceil(total / limitNumber),
+        },
+      });
+    } catch (error) {
+      console.error('Erreur lors de la récupération des bourses:', error);
+      return res.status(500).json({
+        status: false,
+        message: 'Erreur lors de la récupération des bourses',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Récupérer une bourse par ID
+   * GET /bourses/:id
+   */
+  async getById(req, res) {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).json({
+          status: false,
+          message: 'ID de la bourse requis',
+        });
+      }
+
+      const bourseDoc = await this.collection.doc(id).get();
+
+      if (!bourseDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: 'Bourse non trouvée',
+        });
+      }
+
+      const bourseData = bourseDoc.data();
+      const bourse = new Bourse({
+        id: bourseDoc.id,
+        ...bourseData,
+      });
+
+      return res.status(200).json({
+        status: true,
+        data: bourse.toJSON(),
+      });
+    } catch (error) {
+      console.error('Erreur lors de la récupération de la bourse:', error);
+      return res.status(500).json({
+        status: false,
+        message: 'Erreur lors de la récupération de la bourse',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Mettre à jour une bourse
+   * PUT /bourses/:id
+   */
+  async update(req, res) {
+    try {
+      const { id } = req.params;
+      const { nom, pourcentage_remise } = req.body;
+
+      if (!id) {
+        return res.status(400).json({
+          status: false,
+          message: 'ID de la bourse requis',
+        });
+      }
+
+      // Vérifier si la bourse existe
+      const bourseRef = this.collection.doc(id);
+      const bourseDoc = await bourseRef.get();
+
+      if (!bourseDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: 'Bourse non trouvée',
+        });
+      }
+
+      // Validation des données
+      if (nom !== undefined && (!nom || nom.trim() === '')) {
+        return res.status(400).json({
+          status: false,
+          message: 'Le nom ne peut pas être vide',
+        });
+      }
+
+      if (pourcentage_remise !== undefined && (pourcentage_remise < 0 || pourcentage_remise > 100)) {
+        return res.status(400).json({
+          status: false,
+          message: 'Le pourcentage de remise doit être entre 0 et 100',
+        });
+      }
+
+      // Vérifier si le nouveau nom n'existe pas déjà (sauf pour la bourse actuelle)
+      if (nom && nom.trim() !== bourseDoc.data().nom) {
+        const existingBourse = await this.collection
+          .where('nom', '==', nom.trim())
+          .get();
+
+        if (!existingBourse.empty) {
+          return res.status(409).json({
+            status: false,
+            message: 'Une bourse avec ce nom existe déjà',
+          });
+        }
+      }
+
+      // Préparer les données de mise à jour
+      const updateData = {
+        updatedAt: new Date(),
+      };
+
+      if (nom !== undefined) {
+        updateData.nom = nom.trim();
+      }
+
+      if (pourcentage_remise !== undefined) {
+        updateData.pourcentage_remise = Number(pourcentage_remise);
+      }
+
+      // Mettre à jour la bourse
+      await bourseRef.update(updateData);
+
+      // Récupérer la bourse mise à jour
+      const updatedBourse = await bourseRef.get();
+
+      return res.status(200).json({
+        status: true,
+        message: 'Bourse mise à jour avec succès',
+        data: {
+          id: updatedBourse.id,
+          ...updatedBourse.data(),
+        },
+      });
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour de la bourse:', error);
+      return res.status(500).json({
+        status: false,
+        message: 'Erreur lors de la mise à jour de la bourse',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Supprimer une bourse
+   * DELETE /bourses/:id
+   */
+  async delete(req, res) {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).json({
+          status: false,
+          message: 'ID de la bourse requis',
+        });
+      }
+
+      // Vérifier si la bourse existe
+      const bourseRef = this.collection.doc(id);
+      const bourseDoc = await bourseRef.get();
+
+      if (!bourseDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: 'Bourse non trouvée',
+        });
+      }
+
+      // Vérifier si la bourse est utilisée par des étudiants
+      const etudiantsRef = db.collection('etudiants');
+      const etudiantsSnapshot = await etudiantsRef
+        .where('bourse_id', '==', id)
+        .get();
+
+      if (!etudiantsSnapshot.empty) {
+        return res.status(400).json({
+          status: false,
+          message: 'Impossible de supprimer cette bourse car elle est attribuée à des étudiants',
+        });
+      }
+
+      // Supprimer la bourse
+      await bourseRef.delete();
+
+      return res.status(200).json({
+        status: true,
+        message: 'Bourse supprimée avec succès',
+      });
+    } catch (error) {
+      console.error('Erreur lors de la suppression de la bourse:', error);
+      return res.status(500).json({
+        status: false,
+        message: 'Erreur lors de la suppression de la bourse',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Rechercher des bourses par nom
+   * GET /bourses/search?q=terme
+   */
+  async search(req, res) {
+    try {
+      const { q } = req.query;
+
+      if (!q || q.trim() === '') {
+        return res.status(400).json({
+          status: false,
+          message: 'Terme de recherche requis',
+        });
+      }
+
+      const searchTerm = q.trim();
+      const snapshot = await this.collection
+        .where('nom', '>=', searchTerm)
+        .where('nom', '<=', searchTerm + '\uf8ff')
+        .orderBy('nom')
+        .limit(20)
+        .get();
+
+      const bourses = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
 
       return res.status(200).json({
         status: true,
-        data,
+        data: bourses,
+        searchTerm,
+        count: bourses.length,
       });
     } catch (error) {
+      console.error('Erreur lors de la recherche des bourses:', error);
       return res.status(500).json({
         status: false,
-        message: 'Error getting users',
+        message: 'Erreur lors de la recherche des bourses',
         error: error.message,
       });
     }
   }
 
-  async getById(req, res) {
+  /**
+   * Obtenir les statistiques des bourses
+   * GET /bourses/stats
+   */
+  async getStats(req, res) {
     try {
-      const userDoc = await this.collection.doc(req.params.id).get();
+      const snapshot = await this.collection.get();
+      const bourses = snapshot.docs.map((doc) => doc.data());
 
-      if (!userDoc.exists) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
+      const stats = {
+        total: bourses.length,
+        totalRemise: bourses.reduce((sum, bourse) => sum + bourse.pourcentage_remise, 0),
+        moyenneRemise: bourses.length > 0 ? (bourses.reduce((sum, bourse) => sum + bourse.pourcentage_remise, 0) / bourses.length).toFixed(2) : 0,
+        bourseMaxRemise: bourses.length > 0 ? Math.max(...bourses.map(b => b.pourcentage_remise)) : 0,
+        bourseMinRemise: bourses.length > 0 ? Math.min(...bourses.map(b => b.pourcentage_remise)) : 0,
+      };
 
       return res.status(200).json({
         status: true,
-        data: { id: userDoc.id, ...userDoc.data() },
+        data: stats,
       });
     } catch (error) {
+      console.error('Erreur lors de la récupération des statistiques:', error);
       return res.status(500).json({
-        message: 'Error retrieving user',
         status: false,
-        error: error.message,
-      });
-    }
-  }
-
-  async update(req, res) {
-    try {
-      const userRef = this.collection.doc(req.params.id);
-      const doc = await userRef.get();
-
-      if (!doc.exists) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
-
-      // if currentPassword exists and is not null, check if it is correct
-      if (req.body.currentPassword) {
-        const user = doc.data();
-        if (!user.password || !(await bcrypt.compare(req.body.currentPassword, user.password))) {
-          return res.status(401).json({ message: 'Mot de passe incorrect', status: false });
-        }
-
-        // If new password is provided, hash it
-        if (req.body.password) {
-          req.body.password = await bcrypt.hash(req.body.password, 10);
-        }
-      }
-
-      const updates = { ...req.body, updatedAt: new Date() };
-      await userRef.update(updates);
-
-      const updatedUser = await userRef.get();
-
-      return res.status(200).json({
-        status: true,
-        data: { id: updatedUser.id, ...updatedUser.data() },
-      });
-    } catch (error) {
-      return res.status(500).json({
-        message: 'Error updating user',
-        status: false,
-        error: error.message,
-      });
-    }
-  }
-
-  async delete(req, res) {
-    try {
-      const userRef = this.collection.doc(req.params.id);
-      const doc = await userRef.get();
-
-      if (!doc.exists) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
-
-      await userRef.delete();
-
-      return res.status(200).json({
-        message: 'User deleted successfully',
-        status: true,
-      });
-    } catch (error) {
-      return res.status(500).json({
-        message: 'Error deleting user',
-        status: false,
-        error: error.message,
-      });
-    }
-  }
-
-  // we will get the email from the body
-  async forgotPassword(req, res) {
-    try {
-      const { email } = req.body;
-
-      // check if the email is valid
-      if (!email) {
-        return res.status(400).json({ message: 'Email is required', status: false });
-      }
-
-      // Query users with matching email field
-      const usersRef = await this.collection.where('email', '==', email).get();
-      
-      if (usersRef.empty) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
-
-      // Get the first matching user
-      const userDoc = usersRef.docs[0];
-      const userId = userDoc.id;
-      
-      // Generate a random 6-digit reset code
-      const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const resetExpires = new Date();
-      resetExpires.setHours(resetExpires.getHours() + 1); // Code expires in 1 hour
-      
-      // Store reset code and expiration in user document
-      await this.collection.doc(userId).update({
-        resetCode,
-        resetExpires: resetExpires.toISOString()
-      });
-
-      // Send reset code to the email
-      await sendEmail({
-        to: email,
-        subject: 'Mot de passe oublié',
-        template: 'forgotPassword',
-        context: { 
-          code: resetCode,
-          expires: resetExpires.toLocaleString()
-        },
-      });
-
-      return res.status(200).json({ 
-        message: 'Un code de réinitialisation a été envoyé à votre adresse e-mail',
-        status: true 
-      });
-    } catch (error) {
-      return res.status(500).json({
-        message: 'Error forgot password',
-        status: false,
-        error: error.message,
-      });
-    }
-  }
-
-  async resetPassword(req, res) {
-    try {
-      const { email, resetCode, newPassword } = req.body;
-
-      if (!email || !resetCode || !newPassword) {
-        return res.status(400).json({ 
-          message: 'Email, reset code, and new password are required', 
-          status: false 
-        });
-      }
-
-      // Find user with matching email
-      const usersRef = await this.collection.where('email', '==', email).get();
-      
-      if (usersRef.empty) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
-
-      // Get the user document
-      const userDoc = usersRef.docs[0];
-      const userId = userDoc.id;
-      const userData = userDoc.data();
-      
-      // Check if reset code exists and hasn't expired
-      if (!userData.resetCode || userData.resetCode !== resetCode) {
-        return res.status(400).json({ 
-          message: 'Code de réinitialisation invalide', 
-          status: false 
-        });
-      }
-
-      const resetExpires = new Date(userData.resetExpires);
-      if (resetExpires < new Date()) {
-        return res.status(400).json({ 
-          message: 'Le code de réinitialisation a expiré', 
-          status: false 
-        });
-      }
-
-      // Hash the new password
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      
-      // Update user with new password and clear reset fields
-      await this.collection.doc(userId).update({
-        password: hashedPassword,
-        resetCode: null,
-        resetExpires: null,
-        updatedAt: new Date()
-      });
-
-      return res.status(200).json({
-        message: 'Mot de passe réinitialisé avec succès',
-        status: true
-      });
-    } catch (error) {
-      return res.status(500).json({
-        message: 'Error resetting password',
-        status: false,
+        message: 'Erreur lors de la récupération des statistiques',
         error: error.message,
       });
     }
   }
 }
 
-module.exports = new UserController();
+module.exports = new BourseController();

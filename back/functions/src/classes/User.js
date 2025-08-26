@@ -7,7 +7,7 @@ class User {
     this.prenom = data.prenom;
     this.email = data.email;
     this.password = data.password;
-    this.role = data.role; // admin, comptable, parent, étudiant
+    this.role = data.role; // admin, comptable, étudiant
     this.telephone = data.telephone;
     this.adresse = data.adresse;
     this.createdAt = data.createdAt || new Date();
