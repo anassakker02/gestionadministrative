@@ -1,239 +1,405 @@
-// const User = require('../../classes/user'); // Adjust path if necessary
-const db = require('../../../config/firebase'); // Adjust path if necessary
-const bcrypt = require('bcrypt'); // Add bcrypt import
-// const sendEmail = require('../../../utils/sendmail');
+const Tarif = require("../../../classes/Tarif");
+const db = require("../../../config/firebase");
 
-class UserController {
+class TarifController {
   constructor() {
-    this.collection = db.collection('tarifs');
+    this.collection = db.collection("tarifs");
   }
 
+  /**
+   * Créer un nouveau tarif
+   * POST /tarifs
+   */
+  async create(req, res) {
+    try {
+      const { nom, montant } = req.body;
 
+      // Validation des données
+      if (!nom || montant === undefined) {
+        return res.status(400).json({
+          status: false,
+          message: "Le nom et le montant sont requis",
+        });
+      }
+
+      if (typeof montant !== "number" || montant < 0) {
+        return res.status(400).json({
+          status: false,
+          message: "Le montant doit être un nombre positif",
+        });
+      }
+
+      // Vérifier si un tarif avec le même nom existe déjà
+      const existingTarif = await this.collection
+        .where("nom", "==", nom.trim())
+        .get();
+      if (!existingTarif.empty) {
+        return res.status(409).json({
+          status: false,
+          message: "Un tarif avec ce nom existe déjà",
+        });
+      }
+
+      // Créer le nouveau tarif
+      const tarifData = {
+        nom: nom.trim(),
+        montant: Number(montant),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const docRef = await this.collection.add(tarifData);
+      const newTarif = await docRef.get();
+
+      return res.status(201).json({
+        status: true,
+        message: "Tarif créé avec succès",
+        data: {
+          id: newTarif.id,
+          ...newTarif.data(),
+        },
+      });
+    } catch (error) {
+      console.error("Erreur lors de la création du tarif:", error);
+      return res.status(500).json({
+        status: false,
+        message: "Erreur interne du serveur",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Récupérer tous les tarifs
+   * GET /tarifs
+   */
   async getAll(req, res) {
     try {
-      const users = await this.collection.get();
+      const { page = 1, limit = 10, search } = req.query;
+      const pageNumber = parseInt(page);
+      const limitNumber = parseInt(limit);
 
-      const data = users.docs.map((doc) => ({
+      let query = this.collection.orderBy("createdAt", "desc");
+
+      // Recherche par nom si le paramètre search est fourni
+      if (search && search.trim()) {
+        query = query
+          .where("nom", ">=", search.trim())
+          .where("nom", "<=", search.trim() + "\uf8ff");
+      }
+
+      // Pagination
+      const offset = (pageNumber - 1) * limitNumber;
+      const snapshot = await query.limit(limitNumber).offset(offset).get();
+
+      const tarifs = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Compter le total des documents pour la pagination
+      const totalSnapshot = await this.collection.get();
+      const total = totalSnapshot.size;
+
+      return res.status(200).json({
+        status: true,
+        data: tarifs,
+        pagination: {
+          page: pageNumber,
+          limit: limitNumber,
+          total,
+          totalPages: Math.ceil(total / limitNumber),
+        },
+      });
+    } catch (error) {
+      console.error("Erreur lors de la récupération des tarifs:", error);
+      return res.status(500).json({
+        status: false,
+        message: "Erreur lors de la récupération des tarifs",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Récupérer un tarif par ID
+   * GET /tarifs/:id
+   */
+  async getById(req, res) {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).json({
+          status: false,
+          message: "ID du tarif requis",
+        });
+      }
+
+      const tarifDoc = await this.collection.doc(id).get();
+
+      if (!tarifDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: "Tarif non trouvé",
+        });
+      }
+
+      const tarifData = tarifDoc.data();
+      const tarif = new Tarif({
+        id: tarifDoc.id,
+        ...tarifData,
+      });
+
+      return res.status(200).json({
+        status: true,
+        data: tarif.toJSON(),
+      });
+    } catch (error) {
+      console.error("Erreur lors de la récupération du tarif:", error);
+      return res.status(500).json({
+        status: false,
+        message: "Erreur lors de la récupération du tarif",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Mettre à jour un tarif
+   * PUT /tarifs/:id
+   */
+  async update(req, res) {
+    try {
+      const { id } = req.params;
+      const { nom, montant } = req.body;
+
+      if (!id) {
+        return res.status(400).json({
+          status: false,
+          message: "ID du tarif requis",
+        });
+      }
+
+      // Vérifier si le tarif existe
+      const tarifRef = this.collection.doc(id);
+      const tarifDoc = await tarifRef.get();
+
+      if (!tarifDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: "Tarif non trouvé",
+        });
+      }
+
+      // Validation des données
+      if (nom !== undefined && (!nom || nom.trim() === "")) {
+        return res.status(400).json({
+          status: false,
+          message: "Le nom ne peut pas être vide",
+        });
+      }
+
+      if (
+        montant !== undefined &&
+        (typeof montant !== "number" || montant < 0)
+      ) {
+        return res.status(400).json({
+          status: false,
+          message: "Le montant doit être un nombre positif",
+        });
+      }
+
+      // Vérifier si le nouveau nom n'existe pas déjà (sauf pour le tarif actuel)
+      if (nom && nom.trim() !== tarifDoc.data().nom) {
+        const existingTarif = await this.collection
+          .where("nom", "==", nom.trim())
+          .get();
+
+        if (!existingTarif.empty) {
+          return res.status(409).json({
+            status: false,
+            message: "Un tarif avec ce nom existe déjà",
+          });
+        }
+      }
+
+      // Préparer les données de mise à jour
+      const updateData = {
+        updatedAt: new Date(),
+      };
+
+      if (nom !== undefined) {
+        updateData.nom = nom.trim();
+      }
+
+      if (montant !== undefined) {
+        updateData.montant = Number(montant);
+      }
+
+      // Mettre à jour le tarif
+      await tarifRef.update(updateData);
+
+      // Récupérer le tarif mis à jour
+      const updatedTarif = await tarifRef.get();
+
+      return res.status(200).json({
+        status: true,
+        message: "Tarif mis à jour avec succès",
+        data: {
+          id: updatedTarif.id,
+          ...updatedTarif.data(),
+        },
+      });
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour du tarif:", error);
+      return res.status(500).json({
+        status: false,
+        message: "Erreur lors de la mise à jour du tarif",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Supprimer un tarif
+   * DELETE /tarifs/:id
+   */
+  async delete(req, res) {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).json({
+          status: false,
+          message: "ID du tarif requis",
+        });
+      }
+
+      // Vérifier si le tarif existe
+      const tarifRef = this.collection.doc(id);
+      const tarifDoc = await tarifRef.get();
+
+      if (!tarifDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: "Tarif non trouvé",
+        });
+      }
+
+      // Vérifier si le tarif est utilisé par des factures
+      const facturesRef = db.collection("factures");
+      const facturesSnapshot = await facturesRef
+        .where("tarif_id", "==", id)
+        .get();
+
+      if (!facturesSnapshot.empty) {
+        return res.status(400).json({
+          status: false,
+          message:
+            "Impossible de supprimer ce tarif car il est utilisé dans des factures",
+        });
+      }
+
+      // Supprimer le tarif
+      await tarifRef.delete();
+
+      return res.status(200).json({
+        status: true,
+        message: "Tarif supprimé avec succès",
+      });
+    } catch (error) {
+      console.error("Erreur lors de la suppression du tarif:", error);
+      return res.status(500).json({
+        status: false,
+        message: "Erreur lors de la suppression du tarif",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Rechercher des tarifs par nom
+   * GET /tarifs/search?q=terme
+   */
+  async search(req, res) {
+    try {
+      const { q } = req.query;
+
+      if (!q || q.trim() === "") {
+        return res.status(400).json({
+          status: false,
+          message: "Terme de recherche requis",
+        });
+      }
+
+      const searchTerm = q.trim();
+      const snapshot = await this.collection
+        .where("nom", ">=", searchTerm)
+        .where("nom", "<=", searchTerm + "\uf8ff")
+        .orderBy("nom")
+        .limit(20)
+        .get();
+
+      const tarifs = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
 
       return res.status(200).json({
         status: true,
-        data,
+        data: tarifs,
+        searchTerm,
+        count: tarifs.length,
       });
     } catch (error) {
+      console.error("Erreur lors de la recherche des tarifs:", error);
       return res.status(500).json({
         status: false,
-        message: 'Error getting users',
+        message: "Erreur lors de la recherche des tarifs",
         error: error.message,
       });
     }
   }
 
-  async getById(req, res) {
+  /**
+   * Obtenir les statistiques des tarifs
+   * GET /tarifs/stats
+   */
+  async getStats(req, res) {
     try {
-      const userDoc = await this.collection.doc(req.params.id).get();
+      const snapshot = await this.collection.get();
+      const tarifs = snapshot.docs.map((doc) => doc.data());
 
-      if (!userDoc.exists) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
+      const stats = {
+        total: tarifs.length,
+        totalMontant: tarifs.reduce((sum, tarif) => sum + tarif.montant, 0),
+        moyenneMontant:
+          tarifs.length > 0
+            ? (
+                tarifs.reduce((sum, tarif) => sum + tarif.montant, 0) /
+                tarifs.length
+              ).toFixed(2)
+            : 0,
+        tarifMaxMontant:
+          tarifs.length > 0 ? Math.max(...tarifs.map((t) => t.montant)) : 0,
+        tarifMinMontant:
+          tarifs.length > 0 ? Math.min(...tarifs.map((t) => t.montant)) : 0,
+      };
 
       return res.status(200).json({
         status: true,
-        data: { id: userDoc.id, ...userDoc.data() },
+        data: stats,
       });
     } catch (error) {
+      console.error("Erreur lors de la récupération des statistiques:", error);
       return res.status(500).json({
-        message: 'Error retrieving user',
         status: false,
-        error: error.message,
-      });
-    }
-  }
-
-  async update(req, res) {
-    try {
-      const userRef = this.collection.doc(req.params.id);
-      const doc = await userRef.get();
-
-      if (!doc.exists) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
-
-      // if currentPassword exists and is not null, check if it is correct
-      if (req.body.currentPassword) {
-        const user = doc.data();
-        if (!user.password || !(await bcrypt.compare(req.body.currentPassword, user.password))) {
-          return res.status(401).json({ message: 'Mot de passe incorrect', status: false });
-        }
-
-        // If new password is provided, hash it
-        if (req.body.password) {
-          req.body.password = await bcrypt.hash(req.body.password, 10);
-        }
-      }
-
-      const updates = { ...req.body, updatedAt: new Date() };
-      await userRef.update(updates);
-
-      const updatedUser = await userRef.get();
-
-      return res.status(200).json({
-        status: true,
-        data: { id: updatedUser.id, ...updatedUser.data() },
-      });
-    } catch (error) {
-      return res.status(500).json({
-        message: 'Error updating user',
-        status: false,
-        error: error.message,
-      });
-    }
-  }
-
-  async delete(req, res) {
-    try {
-      const userRef = this.collection.doc(req.params.id);
-      const doc = await userRef.get();
-
-      if (!doc.exists) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
-
-      await userRef.delete();
-
-      return res.status(200).json({
-        message: 'User deleted successfully',
-        status: true,
-      });
-    } catch (error) {
-      return res.status(500).json({
-        message: 'Error deleting user',
-        status: false,
-        error: error.message,
-      });
-    }
-  }
-
-  // we will get the email from the body
-  async forgotPassword(req, res) {
-    try {
-      const { email } = req.body;
-
-      // check if the email is valid
-      if (!email) {
-        return res.status(400).json({ message: 'Email is required', status: false });
-      }
-
-      // Query users with matching email field
-      const usersRef = await this.collection.where('email', '==', email).get();
-      
-      if (usersRef.empty) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
-
-      // Get the first matching user
-      const userDoc = usersRef.docs[0];
-      const userId = userDoc.id;
-      
-      // Generate a random 6-digit reset code
-      const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const resetExpires = new Date();
-      resetExpires.setHours(resetExpires.getHours() + 1); // Code expires in 1 hour
-      
-      // Store reset code and expiration in user document
-      await this.collection.doc(userId).update({
-        resetCode,
-        resetExpires: resetExpires.toISOString()
-      });
-
-      // Send reset code to the email
-      await sendEmail({
-        to: email,
-        subject: 'Mot de passe oublié',
-        template: 'forgotPassword',
-        context: { 
-          code: resetCode,
-          expires: resetExpires.toLocaleString()
-        },
-      });
-
-      return res.status(200).json({ 
-        message: 'Un code de réinitialisation a été envoyé à votre adresse e-mail',
-        status: true 
-      });
-    } catch (error) {
-      return res.status(500).json({
-        message: 'Error forgot password',
-        status: false,
-        error: error.message,
-      });
-    }
-  }
-
-  async resetPassword(req, res) {
-    try {
-      const { email, resetCode, newPassword } = req.body;
-
-      if (!email || !resetCode || !newPassword) {
-        return res.status(400).json({ 
-          message: 'Email, reset code, and new password are required', 
-          status: false 
-        });
-      }
-
-      // Find user with matching email
-      const usersRef = await this.collection.where('email', '==', email).get();
-      
-      if (usersRef.empty) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
-
-      // Get the user document
-      const userDoc = usersRef.docs[0];
-      const userId = userDoc.id;
-      const userData = userDoc.data();
-      
-      // Check if reset code exists and hasn't expired
-      if (!userData.resetCode || userData.resetCode !== resetCode) {
-        return res.status(400).json({ 
-          message: 'Code de réinitialisation invalide', 
-          status: false 
-        });
-      }
-
-      const resetExpires = new Date(userData.resetExpires);
-      if (resetExpires < new Date()) {
-        return res.status(400).json({ 
-          message: 'Le code de réinitialisation a expiré', 
-          status: false 
-        });
-      }
-
-      // Hash the new password
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      
-      // Update user with new password and clear reset fields
-      await this.collection.doc(userId).update({
-        password: hashedPassword,
-        resetCode: null,
-        resetExpires: null,
-        updatedAt: new Date()
-      });
-
-      return res.status(200).json({
-        message: 'Mot de passe réinitialisé avec succès',
-        status: true
-      });
-    } catch (error) {
-      return res.status(500).json({
-        message: 'Error resetting password',
-        status: false,
+        message: "Erreur lors de la récupération des statistiques",
         error: error.message,
       });
     }
   }
 }
 
-module.exports = new UserController();
+module.exports = new TarifController();

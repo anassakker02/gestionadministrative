@@ -1,12 +1,11 @@
-const router = require("express").Router(); // Module pour créer un nouveau route
-const relanceController = require("../controllers");
+const router = require("express").Router();
+const relancesController = require("../controllers");
 
-
-router.get('/', relanceController.getAll.bind(relanceController));
-router.get('/:id', relanceController.getById.bind(relanceController));
-router.put('/:id', relanceController.update.bind(relanceController));
-router.delete('/:id', relanceController.delete.bind(relanceController));
-
-
+// CRUD complet des relances
+router.post("/", relancesController.create.bind(relancesController));
+router.get("/", relancesController.getAll.bind(relancesController));
+router.get("/:id", relancesController.getById.bind(relancesController));
+router.put("/:id", relancesController.update.bind(relancesController));
+router.delete("/:id", relancesController.delete.bind(relancesController));
 
 module.exports = router;

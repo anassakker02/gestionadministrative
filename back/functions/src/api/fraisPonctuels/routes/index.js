@@ -1,12 +1,20 @@
-const router = require("express").Router(); // Module pour créer un nouveau route
-const fraisPonctuelsController = require("../controllers");
+const router = require("express").Router();
+const fraisPonctuelController = require("../controllers");
 
-
-router.get('/', fraisPonctuelsController.getAll.bind(fraisPonctuelsController));
-router.get('/:id', fraisPonctuelsController.getById.bind(fraisPonctuelsController));
-router.put('/:id', fraisPonctuelsController.update.bind(fraisPonctuelsController));
-router.delete('/:id', fraisPonctuelsController.delete.bind(fraisPonctuelsController));
-
-
+// CRUD complet des frais ponctuels
+router.post("/", fraisPonctuelController.create.bind(fraisPonctuelController));
+router.get("/", fraisPonctuelController.getAll.bind(fraisPonctuelController));
+router.get(
+  "/:id",
+  fraisPonctuelController.getById.bind(fraisPonctuelController)
+);
+router.put(
+  "/:id",
+  fraisPonctuelController.update.bind(fraisPonctuelController)
+);
+router.delete(
+  "/:id",
+  fraisPonctuelController.delete.bind(fraisPonctuelController)
+);
 
 module.exports = router;

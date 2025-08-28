@@ -1,239 +1,169 @@
-// const User = require('../../classes/user'); // Adjust path if necessary
-const db = require('../../../config/firebase'); // Adjust path if necessary
-const bcrypt = require('bcrypt'); // Add bcrypt import
-// const sendEmail = require('../../../utils/sendmail');
+const Relance = require("../../../classes/Relance");
+const db = require("../../../config/firebase");
 
-class UserController {
+class RelanceController {
   constructor() {
-    this.collection = db.collection('relances');
+    this.collection = db.collection("relances");
   }
 
+  // Créer une relance
+  async create(req, res) {
+    try {
+      const { facture_id, date_envoi, type, statut } = req.body;
 
+      if (!facture_id || !date_envoi || !type) {
+        return res.status(400).json({
+          status: false,
+          message: "Les champs facture_id, date_envoi et type sont requis",
+        });
+      }
+
+      const relanceData = {
+        facture_id,
+        date_envoi: new Date(date_envoi),
+        type: type.trim(),
+        statut: statut || "en attente",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const docRef = await this.collection.add(relanceData);
+      const newRelance = await docRef.get();
+
+      return res.status(201).json({
+        status: true,
+        message: "Relance créée avec succès",
+        data: { id: newRelance.id, ...newRelance.data() },
+      });
+    } catch (error) {
+      console.error("Erreur lors de la création de la relance:", error);
+      return res.status(500).json({
+        status: false,
+        message: "Erreur interne du serveur",
+        error: error.message,
+      });
+    }
+  }
+
+  // Récupérer toutes les relances
   async getAll(req, res) {
     try {
-      const users = await this.collection.get();
-
-      const data = users.docs.map((doc) => ({
+      const snapshot = await this.collection.orderBy("createdAt", "desc").get();
+      const relances = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-
-      return res.status(200).json({
-        status: true,
-        data,
-      });
+      return res.status(200).json({ status: true, data: relances });
     } catch (error) {
+      console.error("Erreur lors de la récupération des relances:", error);
       return res.status(500).json({
         status: false,
-        message: 'Error getting users',
+        message: "Erreur lors de la récupération des relances",
         error: error.message,
       });
     }
   }
 
+  // Récupérer une relance par ID
   async getById(req, res) {
     try {
-      const userDoc = await this.collection.doc(req.params.id).get();
+      const { id } = req.params;
+      if (!id)
+        return res
+          .status(400)
+          .json({ status: false, message: "ID de la relance requis" });
 
-      if (!userDoc.exists) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
+      const relanceDoc = await this.collection.doc(id).get();
+      if (!relanceDoc.exists)
+        return res
+          .status(404)
+          .json({ status: false, message: "Relance non trouvée" });
 
-      return res.status(200).json({
-        status: true,
-        data: { id: userDoc.id, ...userDoc.data() },
-      });
+      const relanceData = relanceDoc.data();
+      const relance = new Relance({ id: relanceDoc.id, ...relanceData });
+
+      return res.status(200).json({ status: true, data: relance.toJSON() });
     } catch (error) {
+      console.error("Erreur lors de la récupération de la relance:", error);
       return res.status(500).json({
-        message: 'Error retrieving user',
         status: false,
+        message: "Erreur lors de la récupération de la relance",
         error: error.message,
       });
     }
   }
 
+  // Mettre à jour une relance
   async update(req, res) {
     try {
-      const userRef = this.collection.doc(req.params.id);
-      const doc = await userRef.get();
+      const { id } = req.params;
+      const { facture_id, date_envoi, type, statut } = req.body;
 
-      if (!doc.exists) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
+      if (!id)
+        return res
+          .status(400)
+          .json({ status: false, message: "ID de la relance requis" });
 
-      // if currentPassword exists and is not null, check if it is correct
-      if (req.body.currentPassword) {
-        const user = doc.data();
-        if (!user.password || !(await bcrypt.compare(req.body.currentPassword, user.password))) {
-          return res.status(401).json({ message: 'Mot de passe incorrect', status: false });
-        }
+      const relanceRef = this.collection.doc(id);
+      const relanceDoc = await relanceRef.get();
+      if (!relanceDoc.exists)
+        return res
+          .status(404)
+          .json({ status: false, message: "Relance non trouvée" });
 
-        // If new password is provided, hash it
-        if (req.body.password) {
-          req.body.password = await bcrypt.hash(req.body.password, 10);
-        }
-      }
+      const updateData = { updatedAt: new Date() };
+      if (facture_id !== undefined) updateData.facture_id = facture_id;
+      if (date_envoi !== undefined) updateData.date_envoi = new Date(date_envoi);
+      if (type !== undefined) updateData.type = type.trim();
+      if (statut !== undefined) updateData.statut = statut;
 
-      const updates = { ...req.body, updatedAt: new Date() };
-      await userRef.update(updates);
-
-      const updatedUser = await userRef.get();
+      await relanceRef.update(updateData);
+      const updatedRelance = await relanceRef.get();
 
       return res.status(200).json({
         status: true,
-        data: { id: updatedUser.id, ...updatedUser.data() },
+        message: "Relance mise à jour avec succès",
+        data: { id: updatedRelance.id, ...updatedRelance.data() },
       });
     } catch (error) {
+      console.error("Erreur lors de la mise à jour de la relance:", error);
       return res.status(500).json({
-        message: 'Error updating user',
         status: false,
+        message: "Erreur lors de la mise à jour de la relance",
         error: error.message,
       });
     }
   }
 
+  // Supprimer une relance
   async delete(req, res) {
     try {
-      const userRef = this.collection.doc(req.params.id);
-      const doc = await userRef.get();
+      const { id } = req.params;
+      if (!id)
+        return res
+          .status(400)
+          .json({ status: false, message: "ID de la relance requis" });
 
-      if (!doc.exists) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
+      const relanceRef = this.collection.doc(id);
+      const relanceDoc = await relanceRef.get();
+      if (!relanceDoc.exists)
+        return res
+          .status(404)
+          .json({ status: false, message: "Relance non trouvée" });
 
-      await userRef.delete();
-
-      return res.status(200).json({
-        message: 'User deleted successfully',
-        status: true,
-      });
+      await relanceRef.delete();
+      return res
+        .status(200)
+        .json({ status: true, message: "Relance supprimée avec succès" });
     } catch (error) {
+      console.error("Erreur lors de la suppression de la relance:", error);
       return res.status(500).json({
-        message: 'Error deleting user',
         status: false,
-        error: error.message,
-      });
-    }
-  }
-
-  // we will get the email from the body
-  async forgotPassword(req, res) {
-    try {
-      const { email } = req.body;
-
-      // check if the email is valid
-      if (!email) {
-        return res.status(400).json({ message: 'Email is required', status: false });
-      }
-
-      // Query users with matching email field
-      const usersRef = await this.collection.where('email', '==', email).get();
-      
-      if (usersRef.empty) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
-
-      // Get the first matching user
-      const userDoc = usersRef.docs[0];
-      const userId = userDoc.id;
-      
-      // Generate a random 6-digit reset code
-      const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const resetExpires = new Date();
-      resetExpires.setHours(resetExpires.getHours() + 1); // Code expires in 1 hour
-      
-      // Store reset code and expiration in user document
-      await this.collection.doc(userId).update({
-        resetCode,
-        resetExpires: resetExpires.toISOString()
-      });
-
-      // Send reset code to the email
-      await sendEmail({
-        to: email,
-        subject: 'Mot de passe oublié',
-        template: 'forgotPassword',
-        context: { 
-          code: resetCode,
-          expires: resetExpires.toLocaleString()
-        },
-      });
-
-      return res.status(200).json({ 
-        message: 'Un code de réinitialisation a été envoyé à votre adresse e-mail',
-        status: true 
-      });
-    } catch (error) {
-      return res.status(500).json({
-        message: 'Error forgot password',
-        status: false,
-        error: error.message,
-      });
-    }
-  }
-
-  async resetPassword(req, res) {
-    try {
-      const { email, resetCode, newPassword } = req.body;
-
-      if (!email || !resetCode || !newPassword) {
-        return res.status(400).json({ 
-          message: 'Email, reset code, and new password are required', 
-          status: false 
-        });
-      }
-
-      // Find user with matching email
-      const usersRef = await this.collection.where('email', '==', email).get();
-      
-      if (usersRef.empty) {
-        return res.status(404).json({ message: 'User not found', status: false });
-      }
-
-      // Get the user document
-      const userDoc = usersRef.docs[0];
-      const userId = userDoc.id;
-      const userData = userDoc.data();
-      
-      // Check if reset code exists and hasn't expired
-      if (!userData.resetCode || userData.resetCode !== resetCode) {
-        return res.status(400).json({ 
-          message: 'Code de réinitialisation invalide', 
-          status: false 
-        });
-      }
-
-      const resetExpires = new Date(userData.resetExpires);
-      if (resetExpires < new Date()) {
-        return res.status(400).json({ 
-          message: 'Le code de réinitialisation a expiré', 
-          status: false 
-        });
-      }
-
-      // Hash the new password
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      
-      // Update user with new password and clear reset fields
-      await this.collection.doc(userId).update({
-        password: hashedPassword,
-        resetCode: null,
-        resetExpires: null,
-        updatedAt: new Date()
-      });
-
-      return res.status(200).json({
-        message: 'Mot de passe réinitialisé avec succès',
-        status: true
-      });
-    } catch (error) {
-      return res.status(500).json({
-        message: 'Error resetting password',
-        status: false,
+        message: "Erreur lors de la suppression de la relance",
         error: error.message,
       });
     }
   }
 }
 
-module.exports = new UserController();
+module.exports = new RelanceController();

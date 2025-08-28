@@ -1,12 +1,11 @@
-const router = require("express").Router(); // Module pour créer un nouveau route
-const echeancierController = require("../controllers");
+const router = require("express").Router();
+const echeanciersController = require("../controllers");
 
-// router.post('/', userController.create.bind(userController));
-router.get('/', echeancierController.getAll.bind(echeancierController));
-router.get('/:id', echeancierController.getById.bind(echeancierController));
-router.put('/:id', echeancierController.update.bind(echeancierController));
-router.delete('/:id', echeancierController.delete.bind(echeancierController));
-
-
+// CRUD complet des échéanciers
+router.post("/", echeanciersController.create.bind(echeanciersController));
+router.get("/", echeanciersController.getAll.bind(echeanciersController));
+router.get("/:id", echeanciersController.getById.bind(echeanciersController));
+router.put("/:id", echeanciersController.update.bind(echeanciersController));
+router.delete("/:id", echeanciersController.delete.bind(echeanciersController));
 
 module.exports = router;
