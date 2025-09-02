@@ -54,20 +54,24 @@ lint_backend:
   stage: lint
   dependencies:
     - install_backend_dependencies
+  before_script:
+    - cd back/functions
   script:
-    - cd back
-    - npx eslint . --max-warnings=0
+    - npx eslint -c .eslintrc.json . --max-warnings=0
   allow_failure: false
+
 
 # --- Lint Frontend ---
 lint_frontend:
   stage: lint
   dependencies:
     - install_frontend_dependencies
-  script:
+  before_script:
     - cd front
-    - npx eslint . --max-warnings=0
+  script:
+    - npx eslint -c eslint.config.js . --ext .js,.jsx,.ts,.tsx --max-warnings=0
   allow_failure: false
+
 
 # --- Test Backend ---
 test_backend:
