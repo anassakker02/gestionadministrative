@@ -276,8 +276,8 @@ rollback_production:
   when: manual
   allow_failure: false
 
-  # Job de test indépendant
-  test_pipeline:
+# Job de test indépendant
+test_pipeline:
   stage: test
   script:
     - echo "Pipeline works!"
