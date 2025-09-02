@@ -275,3 +275,7 @@ rollback_production:
     - main
   when: manual
   allow_failure: false
+  test_pipeline:
+  stage: test
+  script:
+    - echo "Pipeline works!"
