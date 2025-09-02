@@ -9,7 +9,7 @@ variables:
 cache:
   key: ${CI_COMMIT_REF_SLUG}
   paths:
-    - back/functions/node_modules/
+    - back/node_modules/
     - front/node_modules/
     - .npm/
 
@@ -22,25 +22,26 @@ stages:
   - deploy-staging
   - deploy-production
 
+before_script:
+  - npm install -g firebase-tools
+
 # --- Install Backend ---
 install_backend_dependencies:
   stage: install
-  before_script:
-    - cd back/functions
   script:
+    - cd back
     - npm ci --silent --prefer-offline
     - echo "Backend dependencies installed"
   artifacts:
     paths:
-      - back/functions/node_modules/
+      - back/node_modules/
     expire_in: 1h
 
 # --- Install Frontend ---
 install_frontend_dependencies:
   stage: install
-  before_script:
-    - cd front
   script:
+    - cd front
     - npm ci --silent --prefer-offline
     - echo "Frontend dependencies installed"
   artifacts:
@@ -53,9 +54,8 @@ lint_backend:
   stage: lint
   dependencies:
     - install_backend_dependencies
-  before_script:
-    - cd back/functions
   script:
+    - cd back
     - npx eslint . --max-warnings=0
   allow_failure: false
 
@@ -64,9 +64,8 @@ lint_frontend:
   stage: lint
   dependencies:
     - install_frontend_dependencies
-  before_script:
-    - cd front
   script:
+    - cd front
     - npx eslint . --max-warnings=0
   allow_failure: false
 
@@ -75,18 +74,16 @@ test_backend:
   stage: test
   dependencies:
     - install_backend_dependencies
-  before_script:
-    - cd back/functions
   script:
+    - cd back
     - npm test -- --coverage --watchAll=false
-  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
   artifacts:
     reports:
       coverage_report:
         coverage_format: cobertura
-        path: back/functions/coverage/cobertura-coverage.xml
+        path: back/coverage/cobertura-coverage.xml
     paths:
-      - back/functions/coverage/
+      - back/coverage/
     expire_in: 1w
   only:
     - main
@@ -98,9 +95,8 @@ test_frontend:
   stage: test
   dependencies:
     - install_frontend_dependencies
-  before_script:
-    - cd front
   script:
+    - cd front
     - npm run test -- --coverage --watchAll=false
   artifacts:
     reports:
@@ -120,9 +116,8 @@ security_audit_backend:
   stage: security
   dependencies:
     - install_backend_dependencies
-  before_script:
-    - cd back/functions
   script:
+    - cd back
     - npm audit --audit-level high || true
     - npm audit fix --dry-run || true
   allow_failure: true
@@ -136,9 +131,8 @@ security_audit_frontend:
   stage: security
   dependencies:
     - install_frontend_dependencies
-  before_script:
-    - cd front
   script:
+    - cd front
     - npm audit --audit-level high || true
     - npm audit fix --dry-run || true
   allow_failure: true
@@ -152,15 +146,13 @@ build_backend:
   stage: build
   dependencies:
     - install_backend_dependencies
-  before_script:
-    - cd back/functions
-    - npm install -g firebase-tools
   script:
+    - cd back
     - npm run build
     - echo "Backend built"
   artifacts:
     paths:
-      - back/functions/lib/
+      - back/dist/
     expire_in: 2h
   only:
     - main
@@ -171,9 +163,8 @@ build_frontend:
   stage: build
   dependencies:
     - install_frontend_dependencies
-  before_script:
-    - cd front
   script:
+    - cd front
     - npm run build
     - echo "Frontend built"
   artifacts:
@@ -190,10 +181,8 @@ deploy_staging:
   dependencies:
     - build_backend
     - build_frontend
-  before_script:
-    - npm install -g firebase-tools
-    - firebase use $FIREBASE_PROJECT_STAGING_ID --token $FIREBASE_TOKEN
   script:
+    - firebase use $FIREBASE_PROJECT_STAGING_ID --token $FIREBASE_TOKEN
     - firebase deploy --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_STAGING_ID
     - echo "Deployed to staging"
   environment:
@@ -209,10 +198,8 @@ deploy_production:
   dependencies:
     - build_backend
     - build_frontend
-  before_script:
-    - npm install -g firebase-tools
-    - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
   script:
+    - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
     - firebase deploy --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_ID
     - echo "Deployed to production"
   environment:
@@ -227,10 +214,8 @@ deploy_functions_only:
   stage: deploy-production
   dependencies:
     - build_backend
-  before_script:
-    - npm install -g firebase-tools
-    - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
   script:
+    - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
     - firebase deploy --only functions --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_ID
     - echo "Functions deployed only"
   environment:
@@ -244,10 +229,8 @@ deploy_hosting_only:
   stage: deploy-production
   dependencies:
     - build_frontend
-  before_script:
-    - npm install -g firebase-tools
-    - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
   script:
+    - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
     - firebase deploy --only hosting --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_ID
     - echo "Hosting deployed only"
   environment:
@@ -256,23 +239,3 @@ deploy_hosting_only:
     - main
   when: manual
 
-# --- Rollback Production ---
-rollback_production:
-  stage: deploy-production
-  before_script:
-    - npm install -g firebase-tools
-    - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
-  script:
-    - firebase functions:config:clone --from $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
-    - echo "Rollback completed"
-  environment:
-    name: production
-  only:
-    - main
-  when: manual
-
-# --- Test Pipeline Job ---
-test_pipeline:
-  stage: test
-  script:
-    - echo "Pipeline works!"
