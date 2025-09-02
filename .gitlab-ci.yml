@@ -275,6 +275,8 @@ rollback_production:
     - main
   when: manual
   allow_failure: false
+
+  # Job de test indépendant
   test_pipeline:
   stage: test
   script:
