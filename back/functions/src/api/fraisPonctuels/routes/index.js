@@ -1,19 +1,19 @@
-const router = require("express").Router();
-const fraisPonctuelController = require("../controllers");
+const router = require('express').Router();
+const fraisPonctuelController = require('../controllers');
 
 // CRUD complet des frais ponctuels
-router.post("/", fraisPonctuelController.create.bind(fraisPonctuelController));
-router.get("/", fraisPonctuelController.getAll.bind(fraisPonctuelController));
+router.post('/', fraisPonctuelController.create.bind(fraisPonctuelController));
+router.get('/', fraisPonctuelController.getAll.bind(fraisPonctuelController));
 router.get(
-  "/:id",
+  '/:id',
   fraisPonctuelController.getById.bind(fraisPonctuelController)
 );
 router.put(
-  "/:id",
+  '/:id',
   fraisPonctuelController.update.bind(fraisPonctuelController)
 );
 router.delete(
-  "/:id",
+  '/:id',
   fraisPonctuelController.delete.bind(fraisPonctuelController)
 );
 

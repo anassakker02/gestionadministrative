@@ -1,5 +1,5 @@
-const router = require("express").Router(); // Module pour créer un nouveau route
-const bourseController = require("../controllers");
+const router = require('express').Router(); // Module pour créer un nouveau route
+const bourseController = require('../controllers');
 
 // CRUD complet des bourses
 router.post('/', bourseController.create.bind(bourseController));

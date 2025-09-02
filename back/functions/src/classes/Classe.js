@@ -1,11 +1,11 @@
 class Classe {
-    constructor(data) {
-        this.id = data.id;
-        this.nom = data.nom;
-        this.niveau = data.niveau;
-    }
+  constructor(data) {
+    this.id = data.id;
+    this.nom = data.nom;
+    this.niveau = data.niveau;
+  }
 
-    toJSON() {
+  toJSON() {
     return {
       nom: this.nom,
       niveau: this.niveau

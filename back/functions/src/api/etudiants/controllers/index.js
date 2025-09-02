@@ -163,7 +163,7 @@ class EtudiantController {
         // Note: Firestore ne supporte pas les recherches OR complexes
         // On utilise une approche simple avec le nom
         query = query.where('nom', '>=', searchTerm)
-                    .where('nom', '<=', searchTerm + '\uf8ff');
+          .where('nom', '<=', searchTerm + '\uf8ff');
       }
 
       // Pagination
@@ -555,7 +555,7 @@ class EtudiantController {
       // Recherche par nom ou prénom
       if (searchTerm.length >= 2) {
         query = query.where('nom', '>=', searchTerm)
-                    .where('nom', '<=', searchTerm + '\uf8ff');
+          .where('nom', '<=', searchTerm + '\uf8ff');
       }
 
       // Filtres additionnels

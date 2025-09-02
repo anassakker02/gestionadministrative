@@ -1,14 +1,14 @@
 class Tarif {
-    constructor(data) {
-        this.id = data.id;
-        this.classe_id = data.classe_id;
-        this.montant = data.montant;
-        this.annee_scolaire = data.annee_scolaire;
-        this.nationalite = data.nationalite;
-        this.bourse_id = data.bourse_id || null;
+  constructor(data) {
+    this.id = data.id;
+    this.classe_id = data.classe_id;
+    this.montant = data.montant;
+    this.annee_scolaire = data.annee_scolaire;
+    this.nationalite = data.nationalite;
+    this.bourse_id = data.bourse_id || null;
   }
 
-    toJSON() {
+  toJSON() {
     return {
       classe_id: this.classe_id,
       montant: this.montant,
