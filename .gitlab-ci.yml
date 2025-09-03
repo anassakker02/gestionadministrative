@@ -1,4 +1,3 @@
-
 image: node:18-alpine
 
 variables:
@@ -6,6 +5,7 @@ variables:
   FIREBASE_PROJECT_STAGING_ID: $FIREBASE_PROJECT_STAGING_ID
   FIREBASE_TOKEN: $FIREBASE_TOKEN
   NODE_ENV: production
+  HUSKY: 0  # désactive Husky dans tous les jobs CI
 
 cache:
   key: ${CI_COMMIT_REF_SLUG}
@@ -24,176 +24,66 @@ stages:
   - deploy-production
 
 before_script:
-  - npm install -g firebase-tools
+  - npm install -g firebase-tools --no-audit --no-fund
 
-# --- Install Backend ---
-install_backend_dependencies:
+# --- Install Dependencies ---
+install_dependencies:
   stage: install
   script:
-    - cd back
-    - export HUSKY=0
-    - npm ci --silent --prefer-offline
-    - echo "Backend dependencies installed"
+    - cd back && npm ci --silent --prefer-offline
+    - cd ../front && npm ci --silent --prefer-offline
   artifacts:
     paths:
       - back/node_modules/
-    expire_in: 1h
-
-# --- Install Frontend ---
-install_frontend_dependencies:
-  stage: install
-  script:
-    - cd front
-    - export HUSKY=0
-    - npm ci --silent --prefer-offline
-    - echo "Frontend dependencies installed"
-  artifacts:
-    paths:
       - front/node_modules/
     expire_in: 1h
 
-# --- Lint Backend ---
-lint_backend:
+# --- Lint ---
+lint:
   stage: lint
-  dependencies:
-    - install_backend_dependencies
   script:
-    - cd back/functions
-    - export HUSKY=0
-    - npx eslint -c .eslintrc.json . --max-warnings=0
+    - cd back/functions && npx eslint -c .eslintrc.json . --max-warnings=0
+    - cd ../../front && npx eslint -c eslint.config.cjs . --ext .js,.jsx,.ts,.tsx --max-warnings=0
   allow_failure: false
 
-# --- Lint Frontend ---
-lint_frontend:
-  stage: lint
-  dependencies:
-    - install_frontend_dependencies
-  script:
-    - cd front
-    - export HUSKY=0
-    - npx eslint -c eslint.config.cjs . --ext .js,.jsx,.ts,.tsx --max-warnings=0
-  allow_failure: false
-
-# --- Test Backend ---
-test_backend:
+# --- Test ---
+test:
   stage: test
-  dependencies:
-    - install_backend_dependencies
   script:
-    - cd back
-    - export HUSKY=0
-    - npm test -- --coverage --watchAll=false
+    - cd back && npm test -- --coverage --watchAll=false
+    - cd ../front && npm run test -- --coverage --watchAll=false
   artifacts:
-    reports:
-      coverage_report:
-        coverage_format: cobertura
-        path: back/coverage/cobertura-coverage.xml
     paths:
       - back/coverage/
-    expire_in: 1w
-  only:
-    - main
-    - test
-    - merge_requests
-
-# --- Test Frontend ---
-test_frontend:
-  stage: test
-  dependencies:
-    - install_frontend_dependencies
-  script:
-    - cd front
-    - export HUSKY=0
-    - npm run test -- --coverage --watchAll=false
-  artifacts:
-    reports:
-      coverage_report:
-        coverage_format: cobertura
-        path: front/coverage/cobertura-coverage.xml
-    paths:
       - front/coverage/
     expire_in: 1w
-  only:
-    - main
-    - test
-    - merge_requests
 
-# --- Security Audit Backend ---
-security_audit_backend:
+# --- Security Audit ---
+security_audit:
   stage: security
-  dependencies:
-    - install_backend_dependencies
   script:
-    - cd back
-    - npm audit --audit-level high || true
-    - npm audit fix --dry-run || true
+    - cd back && npm audit --audit-level high || true
+    - cd ../front && npm audit --audit-level high || true
   allow_failure: true
-  only:
-    - main
-    - test
-    - merge_requests
 
-# --- Security Audit Frontend ---
-security_audit_frontend:
-  stage: security
-  dependencies:
-    - install_frontend_dependencies
-  script:
-    - cd front
-    - npm audit --audit-level high || true
-    - npm audit fix --dry-run || true
-  allow_failure: true
-  only:
-    - main
-    - test
-    - merge_requests
-
-# --- Build Backend ---
-build_backend:
+# --- Build ---
+build:
   stage: build
-  dependencies:
-    - install_backend_dependencies
   script:
-    - cd back
-    - export HUSKY=0
-    - npm run build
-    - echo "Backend built"
+    - cd back && npm run build
+    - cd ../front && npm run build
   artifacts:
     paths:
       - back/dist/
-    expire_in: 2h
-  only:
-    - main
-    - test
-
-# --- Build Frontend ---
-build_frontend:
-  stage: build
-  dependencies:
-    - install_frontend_dependencies
-  script:
-    - cd front
-    - export HUSKY=0
-    - npm run build
-    - echo "Frontend built"
-  artifacts:
-    paths:
       - front/dist/
     expire_in: 2h
-  only:
-    - main
-    - test
 
 # --- Deploy Staging ---
 deploy_staging:
   stage: deploy-staging
-  dependencies:
-    - build_backend
-    - build_frontend
   script:
     - firebase use $FIREBASE_PROJECT_STAGING_ID --token $FIREBASE_TOKEN
     - firebase deploy --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_STAGING_ID
-    - echo "Deployed to staging"
   environment:
     name: staging
     url: https://$FIREBASE_PROJECT_STAGING_ID.web.app
@@ -204,46 +94,12 @@ deploy_staging:
 # --- Deploy Production ---
 deploy_production:
   stage: deploy-production
-  dependencies:
-    - build_backend
-    - build_frontend
   script:
     - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
     - firebase deploy --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_ID
-    - echo "Deployed to production"
   environment:
     name: production
     url: https://$FIREBASE_PROJECT_ID.web.app
-  only:
-    - main
-  when: manual
-
-# --- Deploy Functions Only ---
-deploy_functions_only:
-  stage: deploy-production
-  dependencies:
-    - build_backend
-  script:
-    - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
-    - firebase deploy --only functions --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_ID
-    - echo "Functions deployed only"
-  environment:
-    name: production
-  only:
-    - main
-  when: manual
-
-# --- Deploy Hosting Only ---
-deploy_hosting_only:
-  stage: deploy-production
-  dependencies:
-    - build_frontend
-  script:
-    - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
-    - firebase deploy --only hosting --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_ID
-    - echo "Hosting deployed only"
-  environment:
-    name: production
   only:
     - main
   when: manual
