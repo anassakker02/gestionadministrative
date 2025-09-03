@@ -1,5 +1,5 @@
 // firebaseCrud.js
-const admin = require('firebase-admin'); // garde l'import si tu veux utiliser admin plus tard
+//const admin = require('firebase-admin'); // garde l'import si tu veux utiliser admin plus tard
 const db = require('../config/firebase');
 
 class FirebaseController {
