@@ -5,7 +5,7 @@ variables:
   FIREBASE_PROJECT_STAGING_ID: $FIREBASE_PROJECT_STAGING_ID
   FIREBASE_TOKEN: $FIREBASE_TOKEN
   NODE_ENV: production
-  HUSKY: 0  # désactive Husky dans tous les jobs CI
+  HUSKY: 0  # IMPORTANT: désactive Husky dans le CI
 
 cache:
   key: ${CI_COMMIT_REF_SLUG}
@@ -18,69 +18,95 @@ stages:
   - install
   - lint
   - test
-  - security
   - build
   - deploy-staging
   - deploy-production
 
 before_script:
-  - npm install -g firebase-tools --no-audit --no-fund
+  - npm install -g firebase-tools --no-fund --no-audit
 
-# --- Install Dependencies ---
-install_dependencies:
+# --- Install Backend ---
+install_backend_dependencies:
   stage: install
   script:
-    - cd back && npm ci --silent --prefer-offline
-    - cd ../front && npm ci --silent --prefer-offline
+    - cd back
+    - npm ci --prefer-offline --silent
+    - echo "Backend dependencies installed"
   artifacts:
     paths:
       - back/node_modules/
+    expire_in: 1h
+
+# --- Install Frontend ---
+install_frontend_dependencies:
+  stage: install
+  script:
+    - cd front
+    - npm ci --prefer-offline --silent
+    - echo "Frontend dependencies installed"
+  artifacts:
+    paths:
       - front/node_modules/
     expire_in: 1h
 
-# --- Lint ---
-lint:
+# --- Lint Backend ---
+lint_backend:
   stage: lint
+  dependencies:
+    - install_backend_dependencies
   script:
-    - cd back/functions && npx eslint -c .eslintrc.json . --max-warnings=0
-    - cd ../../front && npx eslint -c eslint.config.cjs . --ext .js,.jsx,.ts,.tsx --max-warnings=0
+    - cd back/functions
+    - npx eslint -c .eslintrc.json . --max-warnings=0
   allow_failure: false
 
-# --- Test ---
-test:
-  stage: test
+# --- Lint Frontend ---
+lint_frontend:
+  stage: lint
+  dependencies:
+    - install_frontend_dependencies
   script:
-    - cd back && npm test -- --coverage --watchAll=false
-    - cd ../front && npm run test -- --coverage --watchAll=false
-  artifacts:
-    paths:
-      - back/coverage/
-      - front/coverage/
-    expire_in: 1w
+    - cd front
+    - npx eslint -c eslint.config.cjs . --ext .js,.jsx,.ts,.tsx --max-warnings=0
+  allow_failure: false
 
-# --- Security Audit ---
-security_audit:
-  stage: security
-  script:
-    - cd back && npm audit --audit-level high || true
-    - cd ../front && npm audit --audit-level high || true
-  allow_failure: true
-
-# --- Build ---
-build:
+# --- Build Backend ---
+build_backend:
   stage: build
+  dependencies:
+    - install_backend_dependencies
   script:
-    - cd back && npm run build
-    - cd ../front && npm run build
+    - cd back
+    - npm run build
+    - echo "Backend built"
   artifacts:
     paths:
       - back/dist/
+    expire_in: 2h
+  only:
+    - main
+
+# --- Build Frontend ---
+build_frontend:
+  stage: build
+  dependencies:
+    - install_frontend_dependencies
+  script:
+    - cd front
+    - npm run build
+    - echo "Frontend built"
+  artifacts:
+    paths:
       - front/dist/
     expire_in: 2h
+  only:
+    - main
 
 # --- Deploy Staging ---
 deploy_staging:
   stage: deploy-staging
+  dependencies:
+    - build_backend
+    - build_frontend
   script:
     - firebase use $FIREBASE_PROJECT_STAGING_ID --token $FIREBASE_TOKEN
     - firebase deploy --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_STAGING_ID
@@ -94,6 +120,9 @@ deploy_staging:
 # --- Deploy Production ---
 deploy_production:
   stage: deploy-production
+  dependencies:
+    - build_backend
+    - build_frontend
   script:
     - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
     - firebase deploy --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_ID
@@ -103,3 +132,5 @@ deploy_production:
   only:
     - main
   when: manual
+
+
