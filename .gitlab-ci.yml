@@ -5,11 +5,12 @@ variables:
   FIREBASE_PROJECT_STAGING_ID: $FIREBASE_PROJECT_STAGING_ID
   FIREBASE_TOKEN: $FIREBASE_TOKEN
   NODE_ENV: production
+  HUSKY: 0  # Désactive Husky dans le CI pour éviter les erreurs de hook
 
 cache:
   key: ${CI_COMMIT_REF_SLUG}
   paths:
-    - back/functions/node_modules/
+    - back/node_modules/
     - front/node_modules/
     - .npm/
 
@@ -22,87 +23,83 @@ stages:
   - deploy-staging
   - deploy-production
 
-# global prereq (firebase cli)
 before_script:
   - npm install -g firebase-tools --no-audit --no-fund
 
-# -------------------------
-# Install dependencies
-# -------------------------
+# --- Install Backend ---
 install_backend_dependencies:
   stage: install
   script:
-    - cd back/functions
+    - cd back
     - npm ci --silent --prefer-offline
-    - echo "Backend (functions) deps installed"
+    - echo "Backend dependencies installed"
   artifacts:
     paths:
-      - back/functions/node_modules/
+      - back/node_modules/
     expire_in: 1h
 
+# --- Install Frontend ---
 install_frontend_dependencies:
   stage: install
   script:
     - cd front
     - npm ci --silent --prefer-offline
-    - echo "Frontend deps installed"
+    - npx husky install  # Installe Husky dans le CI
+    - echo "Frontend dependencies installed"
   artifacts:
     paths:
       - front/node_modules/
     expire_in: 1h
 
-# -------------------------
-# Lint
-# -------------------------
+# --- Lint Backend ---
 lint_backend:
   stage: lint
   dependencies:
     - install_backend_dependencies
   script:
     - cd back/functions
-    # use the local ESLint installed by npm ci (works if eslint is in devDependencies)
-    - npx eslint . --max-warnings=0
+    - npx eslint -c .eslintrc.json . --max-warnings=0
   allow_failure: false
 
+# --- Lint Frontend ---
 lint_frontend:
   stage: lint
   dependencies:
     - install_frontend_dependencies
   script:
     - cd front
-    - npx eslint . --max-warnings=0
+    - npx eslint -c eslint.config.cjs . --ext .js,.jsx,.ts,.tsx --max-warnings=0
   allow_failure: false
 
-# -------------------------
-# Tests
-# -------------------------
+# --- Test Backend ---
 test_backend:
   stage: test
   dependencies:
     - install_backend_dependencies
   script:
-    - cd back/functions
-    - npm test -- --coverage --watchAll=false || true
+    - cd back
+    - npm test -- --coverage --watchAll=false
   artifacts:
     reports:
       coverage_report:
         coverage_format: cobertura
-        path: back/functions/coverage/cobertura-coverage.xml
+        path: back/coverage/cobertura-coverage.xml
     paths:
-      - back/functions/coverage/
+      - back/coverage/
     expire_in: 1w
   only:
     - main
     - test
     - merge_requests
 
+# --- Test Frontend ---
 test_frontend:
   stage: test
   dependencies:
     - install_frontend_dependencies
   script:
     - cd front
-    - npm run test -- --coverage --watchAll=false || true
+    - npm run test -- --coverage --watchAll=false
   artifacts:
     reports:
       coverage_report:
@@ -116,15 +113,13 @@ test_frontend:
     - test
     - merge_requests
 
-# -------------------------
-# Security audits (non-blocking)
-# -------------------------
+# --- Security Audit Backend ---
 security_audit_backend:
   stage: security
   dependencies:
     - install_backend_dependencies
   script:
-    - cd back/functions
+    - cd back
     - npm audit --audit-level high || true
     - npm audit fix --dry-run || true
   allow_failure: true
@@ -133,6 +128,7 @@ security_audit_backend:
     - test
     - merge_requests
 
+# --- Security Audit Frontend ---
 security_audit_frontend:
   stage: security
   dependencies:
@@ -147,25 +143,24 @@ security_audit_frontend:
     - test
     - merge_requests
 
-# -------------------------
-# Build
-# -------------------------
+# --- Build Backend ---
 build_backend:
   stage: build
   dependencies:
     - install_backend_dependencies
   script:
-    - cd back/functions
-    - npm run build || echo "No build script for backend/functions"
-    - echo "Backend build step finished"
+    - cd back
+    - npm run build
+    - echo "Backend built"
   artifacts:
     paths:
-      - back/functions/lib/
+      - back/dist/
     expire_in: 2h
   only:
     - main
     - test
 
+# --- Build Frontend ---
 build_frontend:
   stage: build
   dependencies:
@@ -182,16 +177,16 @@ build_frontend:
     - main
     - test
 
-# -------------------------
-# Deploys (manual)
-# -------------------------
+# --- Deploy Staging ---
 deploy_staging:
   stage: deploy-staging
   dependencies:
     - build_backend
     - build_frontend
   script:
-    - firebase deploy --project $FIREBASE_PROJECT_STAGING_ID --token $FIREBASE_TOKEN
+    - firebase use $FIREBASE_PROJECT_STAGING_ID --token $FIREBASE_TOKEN
+    - firebase deploy --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_STAGING_ID
+    - echo "Deployed to staging"
   environment:
     name: staging
     url: https://$FIREBASE_PROJECT_STAGING_ID.web.app
@@ -199,13 +194,16 @@ deploy_staging:
     - test
   when: manual
 
+# --- Deploy Production ---
 deploy_production:
   stage: deploy-production
   dependencies:
     - build_backend
     - build_frontend
   script:
-    - firebase deploy --project $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
+    - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
+    - firebase deploy --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_ID
+    - echo "Deployed to production"
   environment:
     name: production
     url: https://$FIREBASE_PROJECT_ID.web.app
@@ -213,26 +211,33 @@ deploy_production:
     - main
   when: manual
 
+# --- Deploy Functions Only ---
 deploy_functions_only:
   stage: deploy-production
   dependencies:
     - build_backend
   script:
-    - firebase deploy --only functions --project $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
+    - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
+    - firebase deploy --only functions --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_ID
+    - echo "Functions deployed only"
   environment:
     name: production
   only:
     - main
   when: manual
 
+# --- Deploy Hosting Only ---
 deploy_hosting_only:
   stage: deploy-production
   dependencies:
     - build_frontend
   script:
-    - firebase deploy --only hosting --project $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
+    - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
+    - firebase deploy --only hosting --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_ID
+    - echo "Hosting deployed only"
   environment:
     name: production
   only:
     - main
   when: manual
+
