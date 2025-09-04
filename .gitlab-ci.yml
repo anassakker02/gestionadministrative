@@ -30,7 +30,7 @@ install_backend_dependencies:
   stage: install
   script:
     - cd back
-    - npm ci --prefer-offline --silent
+    - npm install --prefer-offline --silent
     - echo "Backend dependencies installed"
   artifacts:
     paths:
@@ -42,7 +42,7 @@ install_frontend_dependencies:
   stage: install
   script:
     - cd front
-    - npm ci --prefer-offline --silent
+    - npm install --prefer-offline --silent
     - echo "Frontend dependencies installed"
   artifacts:
     paths:
