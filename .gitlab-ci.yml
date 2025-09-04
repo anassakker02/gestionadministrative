@@ -42,8 +42,8 @@ install_frontend_dependencies:
   stage: install
   script:
     - cd front
-    - npm install --prefer-offline --legacy-peer-deps
-    - npm ci --prefer-offline --legacy-peer-deps || true
+    - npm install --prefer-offline --legacy-peer-deps --ignore-scripts
+    - npm ci --prefer-offline --legacy-peer-deps --ignore-scripts || true
     - echo "Frontend dependencies installed"
   artifacts:
     paths:
