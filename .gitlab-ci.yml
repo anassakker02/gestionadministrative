@@ -56,8 +56,8 @@ lint_backend:
   dependencies:
     - install_backend_dependencies
   script:
-    - cd back/functions
-    - npx eslint -c .eslintrc.json . --max-warnings=0
+    - cd back
+    - npm run lint
   allow_failure: false
 
 # --- Lint Frontend ---
@@ -67,7 +67,7 @@ lint_frontend:
     - install_frontend_dependencies
   script:
     - cd front
-    - npx eslint -c eslint.config.cjs . --ext .js,.jsx,.ts,.tsx --max-warnings=0
+    - npm run lint
   allow_failure: false
 
 # --- Test Backend ---
