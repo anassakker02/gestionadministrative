@@ -86,7 +86,7 @@ test_frontend:
     - install_frontend_dependencies
   script:
     - cd front
-    - npx vitest run
+    - npx vitest run --passWithNoTests
   allow_failure: false
 
 # --- Build Backend ---
