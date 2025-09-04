@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "bcrypt": "^6.0.0"
+    "@paypal/checkout-server-sdk": "^1.0.3",
+    "bcrypt": "^6.0.0",
+    "stripe": "^18.5.0"
   }
 }
