@@ -1,15 +1,15 @@
 class Etudiant {
-    constructor(data) {
-        this.id = data.id;
-        this.nom = data.nom;
-        this.prenom = data.prenom;
-        this.date_naissance = data.date_naissance;
-        this.classe_id = data.classe_id;
-        this.nationalite = data.nationalite;
-        this.bourse_id = data.bourse_id;
-    }
+  constructor(data) {
+    this.id = data.id;
+    this.nom = data.nom;
+    this.prenom = data.prenom;
+    this.date_naissance = data.date_naissance;
+    this.classe_id = data.classe_id;
+    this.nationalite = data.nationalite;
+    this.bourse_id = data.bourse_id;
+  }
 
-    toJSON() {
+  toJSON() {
     return {
       nom: this.nom,
       prenom: this.prenom,

@@ -86,7 +86,7 @@ class BourseController {
       // Recherche par nom si le paramètre search est fourni
       if (search && search.trim()) {
         query = query.where('nom', '>=', search.trim())
-                    .where('nom', '<=', search.trim() + '\uf8ff');
+          .where('nom', '<=', search.trim() + '\uf8ff');
       }
 
       // Pagination

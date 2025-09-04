@@ -1,5 +1,5 @@
-const router = require("express").Router();
-const classeController = require("../controllers");
+const router = require('express').Router();
+const classeController = require('../controllers');
 
 // CRUD complet des classes
 router.post('/', classeController.create.bind(classeController));

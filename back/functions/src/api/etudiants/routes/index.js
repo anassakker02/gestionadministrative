@@ -1,5 +1,5 @@
-const router = require("express").Router();
-const etudiantController = require("../controllers");
+const router = require('express').Router();
+const etudiantController = require('../controllers');
 
 // CRUD complet des étudiants
 router.post('/', etudiantController.create.bind(etudiantController));

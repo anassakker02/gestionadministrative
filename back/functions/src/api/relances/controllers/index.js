@@ -1,9 +1,9 @@
-const Relance = require("../../../classes/Relance");
-const db = require("../../../config/firebase");
+const Relance = require('../../../classes/Relance');
+const db = require('../../../config/firebase');
 
 class RelanceController {
   constructor() {
-    this.collection = db.collection("relances");
+    this.collection = db.collection('relances');
   }
 
   // Créer une relance
@@ -14,7 +14,7 @@ class RelanceController {
       if (!facture_id || !date_envoi || !type) {
         return res.status(400).json({
           status: false,
-          message: "Les champs facture_id, date_envoi et type sont requis",
+          message: 'Les champs facture_id, date_envoi et type sont requis',
         });
       }
 
@@ -22,7 +22,7 @@ class RelanceController {
         facture_id,
         date_envoi: new Date(date_envoi),
         type: type.trim(),
-        statut: statut || "en attente",
+        statut: statut || 'en attente',
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -32,14 +32,14 @@ class RelanceController {
 
       return res.status(201).json({
         status: true,
-        message: "Relance créée avec succès",
+        message: 'Relance créée avec succès',
         data: { id: newRelance.id, ...newRelance.data() },
       });
     } catch (error) {
-      console.error("Erreur lors de la création de la relance:", error);
+      console.error('Erreur lors de la création de la relance:', error);
       return res.status(500).json({
         status: false,
-        message: "Erreur interne du serveur",
+        message: 'Erreur interne du serveur',
         error: error.message,
       });
     }
@@ -48,17 +48,17 @@ class RelanceController {
   // Récupérer toutes les relances
   async getAll(req, res) {
     try {
-      const snapshot = await this.collection.orderBy("createdAt", "desc").get();
+      const snapshot = await this.collection.orderBy('createdAt', 'desc').get();
       const relances = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
       return res.status(200).json({ status: true, data: relances });
     } catch (error) {
-      console.error("Erreur lors de la récupération des relances:", error);
+      console.error('Erreur lors de la récupération des relances:', error);
       return res.status(500).json({
         status: false,
-        message: "Erreur lors de la récupération des relances",
+        message: 'Erreur lors de la récupération des relances',
         error: error.message,
       });
     }
@@ -71,23 +71,23 @@ class RelanceController {
       if (!id)
         return res
           .status(400)
-          .json({ status: false, message: "ID de la relance requis" });
+          .json({ status: false, message: 'ID de la relance requis' });
 
       const relanceDoc = await this.collection.doc(id).get();
       if (!relanceDoc.exists)
         return res
           .status(404)
-          .json({ status: false, message: "Relance non trouvée" });
+          .json({ status: false, message: 'Relance non trouvée' });
 
       const relanceData = relanceDoc.data();
       const relance = new Relance({ id: relanceDoc.id, ...relanceData });
 
       return res.status(200).json({ status: true, data: relance.toJSON() });
     } catch (error) {
-      console.error("Erreur lors de la récupération de la relance:", error);
+      console.error('Erreur lors de la récupération de la relance:', error);
       return res.status(500).json({
         status: false,
-        message: "Erreur lors de la récupération de la relance",
+        message: 'Erreur lors de la récupération de la relance',
         error: error.message,
       });
     }
@@ -102,14 +102,14 @@ class RelanceController {
       if (!id)
         return res
           .status(400)
-          .json({ status: false, message: "ID de la relance requis" });
+          .json({ status: false, message: 'ID de la relance requis' });
 
       const relanceRef = this.collection.doc(id);
       const relanceDoc = await relanceRef.get();
       if (!relanceDoc.exists)
         return res
           .status(404)
-          .json({ status: false, message: "Relance non trouvée" });
+          .json({ status: false, message: 'Relance non trouvée' });
 
       const updateData = { updatedAt: new Date() };
       if (facture_id !== undefined) updateData.facture_id = facture_id;
@@ -122,14 +122,14 @@ class RelanceController {
 
       return res.status(200).json({
         status: true,
-        message: "Relance mise à jour avec succès",
+        message: 'Relance mise à jour avec succès',
         data: { id: updatedRelance.id, ...updatedRelance.data() },
       });
     } catch (error) {
-      console.error("Erreur lors de la mise à jour de la relance:", error);
+      console.error('Erreur lors de la mise à jour de la relance:', error);
       return res.status(500).json({
         status: false,
-        message: "Erreur lors de la mise à jour de la relance",
+        message: 'Erreur lors de la mise à jour de la relance',
         error: error.message,
       });
     }
@@ -142,24 +142,24 @@ class RelanceController {
       if (!id)
         return res
           .status(400)
-          .json({ status: false, message: "ID de la relance requis" });
+          .json({ status: false, message: 'ID de la relance requis' });
 
       const relanceRef = this.collection.doc(id);
       const relanceDoc = await relanceRef.get();
       if (!relanceDoc.exists)
         return res
           .status(404)
-          .json({ status: false, message: "Relance non trouvée" });
+          .json({ status: false, message: 'Relance non trouvée' });
 
       await relanceRef.delete();
       return res
         .status(200)
-        .json({ status: true, message: "Relance supprimée avec succès" });
+        .json({ status: true, message: 'Relance supprimée avec succès' });
     } catch (error) {
-      console.error("Erreur lors de la suppression de la relance:", error);
+      console.error('Erreur lors de la suppression de la relance:', error);
       return res.status(500).json({
         status: false,
-        message: "Erreur lors de la suppression de la relance",
+        message: 'Erreur lors de la suppression de la relance',
         error: error.message,
       });
     }

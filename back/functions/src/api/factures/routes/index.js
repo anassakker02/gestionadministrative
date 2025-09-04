@@ -1,5 +1,5 @@
-const router = require("express").Router();
-const factureController = require("../controllers");
+const router = require('express').Router();
+const factureController = require('../controllers');
 
 // CRUD complet des factures
 router.post('/', factureController.create.bind(factureController));

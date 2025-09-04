@@ -1,9 +1,9 @@
-const Tarif = require("../../../classes/Tarif");
-const db = require("../../../config/firebase");
+const Tarif = require('../../../classes/Tarif');
+const db = require('../../../config/firebase');
 
 class TarifController {
   constructor() {
-    this.collection = db.collection("tarifs");
+    this.collection = db.collection('tarifs');
   }
 
   /**
@@ -18,25 +18,25 @@ class TarifController {
       if (!nom || montant === undefined) {
         return res.status(400).json({
           status: false,
-          message: "Le nom et le montant sont requis",
+          message: 'Le nom et le montant sont requis',
         });
       }
 
-      if (typeof montant !== "number" || montant < 0) {
+      if (typeof montant !== 'number' || montant < 0) {
         return res.status(400).json({
           status: false,
-          message: "Le montant doit être un nombre positif",
+          message: 'Le montant doit être un nombre positif',
         });
       }
 
       // Vérifier si un tarif avec le même nom existe déjà
       const existingTarif = await this.collection
-        .where("nom", "==", nom.trim())
+        .where('nom', '==', nom.trim())
         .get();
       if (!existingTarif.empty) {
         return res.status(409).json({
           status: false,
-          message: "Un tarif avec ce nom existe déjà",
+          message: 'Un tarif avec ce nom existe déjà',
         });
       }
 
@@ -53,17 +53,17 @@ class TarifController {
 
       return res.status(201).json({
         status: true,
-        message: "Tarif créé avec succès",
+        message: 'Tarif créé avec succès',
         data: {
           id: newTarif.id,
           ...newTarif.data(),
         },
       });
     } catch (error) {
-      console.error("Erreur lors de la création du tarif:", error);
+      console.error('Erreur lors de la création du tarif:', error);
       return res.status(500).json({
         status: false,
-        message: "Erreur interne du serveur",
+        message: 'Erreur interne du serveur',
         error: error.message,
       });
     }
@@ -79,13 +79,13 @@ class TarifController {
       const pageNumber = parseInt(page);
       const limitNumber = parseInt(limit);
 
-      let query = this.collection.orderBy("createdAt", "desc");
+      let query = this.collection.orderBy('createdAt', 'desc');
 
       // Recherche par nom si le paramètre search est fourni
       if (search && search.trim()) {
         query = query
-          .where("nom", ">=", search.trim())
-          .where("nom", "<=", search.trim() + "\uf8ff");
+          .where('nom', '>=', search.trim())
+          .where('nom', '<=', search.trim() + '\uf8ff');
       }
 
       // Pagination
@@ -112,10 +112,10 @@ class TarifController {
         },
       });
     } catch (error) {
-      console.error("Erreur lors de la récupération des tarifs:", error);
+      console.error('Erreur lors de la récupération des tarifs:', error);
       return res.status(500).json({
         status: false,
-        message: "Erreur lors de la récupération des tarifs",
+        message: 'Erreur lors de la récupération des tarifs',
         error: error.message,
       });
     }
@@ -132,7 +132,7 @@ class TarifController {
       if (!id) {
         return res.status(400).json({
           status: false,
-          message: "ID du tarif requis",
+          message: 'ID du tarif requis',
         });
       }
 
@@ -141,7 +141,7 @@ class TarifController {
       if (!tarifDoc.exists) {
         return res.status(404).json({
           status: false,
-          message: "Tarif non trouvé",
+          message: 'Tarif non trouvé',
         });
       }
 
@@ -156,10 +156,10 @@ class TarifController {
         data: tarif.toJSON(),
       });
     } catch (error) {
-      console.error("Erreur lors de la récupération du tarif:", error);
+      console.error('Erreur lors de la récupération du tarif:', error);
       return res.status(500).json({
         status: false,
-        message: "Erreur lors de la récupération du tarif",
+        message: 'Erreur lors de la récupération du tarif',
         error: error.message,
       });
     }
@@ -177,7 +177,7 @@ class TarifController {
       if (!id) {
         return res.status(400).json({
           status: false,
-          message: "ID du tarif requis",
+          message: 'ID du tarif requis',
         });
       }
 
@@ -188,38 +188,38 @@ class TarifController {
       if (!tarifDoc.exists) {
         return res.status(404).json({
           status: false,
-          message: "Tarif non trouvé",
+          message: 'Tarif non trouvé',
         });
       }
 
       // Validation des données
-      if (nom !== undefined && (!nom || nom.trim() === "")) {
+      if (nom !== undefined && (!nom || nom.trim() === '')) {
         return res.status(400).json({
           status: false,
-          message: "Le nom ne peut pas être vide",
+          message: 'Le nom ne peut pas être vide',
         });
       }
 
       if (
         montant !== undefined &&
-        (typeof montant !== "number" || montant < 0)
+        (typeof montant !== 'number' || montant < 0)
       ) {
         return res.status(400).json({
           status: false,
-          message: "Le montant doit être un nombre positif",
+          message: 'Le montant doit être un nombre positif',
         });
       }
 
       // Vérifier si le nouveau nom n'existe pas déjà (sauf pour le tarif actuel)
       if (nom && nom.trim() !== tarifDoc.data().nom) {
         const existingTarif = await this.collection
-          .where("nom", "==", nom.trim())
+          .where('nom', '==', nom.trim())
           .get();
 
         if (!existingTarif.empty) {
           return res.status(409).json({
             status: false,
-            message: "Un tarif avec ce nom existe déjà",
+            message: 'Un tarif avec ce nom existe déjà',
           });
         }
       }
@@ -245,17 +245,17 @@ class TarifController {
 
       return res.status(200).json({
         status: true,
-        message: "Tarif mis à jour avec succès",
+        message: 'Tarif mis à jour avec succès',
         data: {
           id: updatedTarif.id,
           ...updatedTarif.data(),
         },
       });
     } catch (error) {
-      console.error("Erreur lors de la mise à jour du tarif:", error);
+      console.error('Erreur lors de la mise à jour du tarif:', error);
       return res.status(500).json({
         status: false,
-        message: "Erreur lors de la mise à jour du tarif",
+        message: 'Erreur lors de la mise à jour du tarif',
         error: error.message,
       });
     }
@@ -272,7 +272,7 @@ class TarifController {
       if (!id) {
         return res.status(400).json({
           status: false,
-          message: "ID du tarif requis",
+          message: 'ID du tarif requis',
         });
       }
 
@@ -283,21 +283,21 @@ class TarifController {
       if (!tarifDoc.exists) {
         return res.status(404).json({
           status: false,
-          message: "Tarif non trouvé",
+          message: 'Tarif non trouvé',
         });
       }
 
       // Vérifier si le tarif est utilisé par des factures
-      const facturesRef = db.collection("factures");
+      const facturesRef = db.collection('factures');
       const facturesSnapshot = await facturesRef
-        .where("tarif_id", "==", id)
+        .where('tarif_id', '==', id)
         .get();
 
       if (!facturesSnapshot.empty) {
         return res.status(400).json({
           status: false,
           message:
-            "Impossible de supprimer ce tarif car il est utilisé dans des factures",
+            'Impossible de supprimer ce tarif car il est utilisé dans des factures',
         });
       }
 
@@ -306,13 +306,13 @@ class TarifController {
 
       return res.status(200).json({
         status: true,
-        message: "Tarif supprimé avec succès",
+        message: 'Tarif supprimé avec succès',
       });
     } catch (error) {
-      console.error("Erreur lors de la suppression du tarif:", error);
+      console.error('Erreur lors de la suppression du tarif:', error);
       return res.status(500).json({
         status: false,
-        message: "Erreur lors de la suppression du tarif",
+        message: 'Erreur lors de la suppression du tarif',
         error: error.message,
       });
     }
@@ -326,18 +326,18 @@ class TarifController {
     try {
       const { q } = req.query;
 
-      if (!q || q.trim() === "") {
+      if (!q || q.trim() === '') {
         return res.status(400).json({
           status: false,
-          message: "Terme de recherche requis",
+          message: 'Terme de recherche requis',
         });
       }
 
       const searchTerm = q.trim();
       const snapshot = await this.collection
-        .where("nom", ">=", searchTerm)
-        .where("nom", "<=", searchTerm + "\uf8ff")
-        .orderBy("nom")
+        .where('nom', '>=', searchTerm)
+        .where('nom', '<=', searchTerm + '\uf8ff')
+        .orderBy('nom')
         .limit(20)
         .get();
 
@@ -353,10 +353,10 @@ class TarifController {
         count: tarifs.length,
       });
     } catch (error) {
-      console.error("Erreur lors de la recherche des tarifs:", error);
+      console.error('Erreur lors de la recherche des tarifs:', error);
       return res.status(500).json({
         status: false,
-        message: "Erreur lors de la recherche des tarifs",
+        message: 'Erreur lors de la recherche des tarifs',
         error: error.message,
       });
     }
@@ -377,9 +377,9 @@ class TarifController {
         moyenneMontant:
           tarifs.length > 0
             ? (
-                tarifs.reduce((sum, tarif) => sum + tarif.montant, 0) /
+              tarifs.reduce((sum, tarif) => sum + tarif.montant, 0) /
                 tarifs.length
-              ).toFixed(2)
+            ).toFixed(2)
             : 0,
         tarifMaxMontant:
           tarifs.length > 0 ? Math.max(...tarifs.map((t) => t.montant)) : 0,
@@ -392,10 +392,10 @@ class TarifController {
         data: stats,
       });
     } catch (error) {
-      console.error("Erreur lors de la récupération des statistiques:", error);
+      console.error('Erreur lors de la récupération des statistiques:', error);
       return res.status(500).json({
         status: false,
-        message: "Erreur lors de la récupération des statistiques",
+        message: 'Erreur lors de la récupération des statistiques',
         error: error.message,
       });
     }

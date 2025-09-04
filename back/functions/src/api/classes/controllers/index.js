@@ -118,7 +118,7 @@ class ClasseController {
       // Recherche par nom
       if (search && search.trim()) {
         query = query.where('nom', '>=', search.trim())
-                    .where('nom', '<=', search.trim() + '\uf8ff');
+          .where('nom', '<=', search.trim() + '\uf8ff');
       }
 
       // Pagination
@@ -447,7 +447,7 @@ class ClasseController {
       // Recherche par nom
       if (searchTerm.length >= 2) {
         query = query.where('nom', '>=', searchTerm)
-                    .where('nom', '<=', searchTerm + '\uf8ff');
+          .where('nom', '<=', searchTerm + '\uf8ff');
       }
 
       // Filtres additionnels

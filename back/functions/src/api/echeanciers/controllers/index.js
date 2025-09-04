@@ -1,9 +1,9 @@
-const Echeancier = require("../../../classes/Echeancier");
-const db = require("../../../config/firebase");
+const Echeancier = require('../../../classes/Echeancier');
+const db = require('../../../config/firebase');
 
 class EcheancierController {
   constructor() {
-    this.collection = db.collection("echeanciers");
+    this.collection = db.collection('echeanciers');
   }
 
   // Créer un échéancier
@@ -14,7 +14,7 @@ class EcheancierController {
         return res.status(400).json({
           status: false,
           message:
-            "Les champs student_id, date_echeance, montant et statut sont requis",
+            'Les champs student_id, date_echeance, montant et statut sont requis',
         });
       }
       const echeancierData = {
@@ -29,14 +29,14 @@ class EcheancierController {
       const newEcheancier = await docRef.get();
       return res.status(201).json({
         status: true,
-        message: "Échéancier créé avec succès",
+        message: 'Échéancier créé avec succès',
         data: { id: newEcheancier.id, ...newEcheancier.data() },
       });
     } catch (error) {
-      console.error("Erreur lors de la création de l'échéancier:", error);
+      console.error('Erreur lors de la création de l\'échéancier:', error);
       return res.status(500).json({
         status: false,
-        message: "Erreur interne du serveur",
+        message: 'Erreur interne du serveur',
         error: error.message,
       });
     }
@@ -45,19 +45,19 @@ class EcheancierController {
   // Récupérer tous les échéanciers
   async getAll(req, res) {
     try {
-      const snapshot = await this.collection.orderBy("createdAt", "desc").get();
+      const snapshot = await this.collection.orderBy('createdAt', 'desc').get();
       const echeanciers = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
       return res.status(200).json({ status: true, data: echeanciers });
     } catch (error) {
-      console.error("Erreur lors de la récupération des échéanciers:", error);
+      console.error('Erreur lors de la récupération des échéanciers:', error);
       return res
         .status(500)
         .json({
           status: false,
-          message: "Erreur lors de la récupération des échéanciers",
+          message: 'Erreur lors de la récupération des échéanciers',
           error: error.message,
         });
     }
@@ -70,13 +70,13 @@ class EcheancierController {
       if (!id) {
         return res
           .status(400)
-          .json({ status: false, message: "ID de l'échéancier requis" });
+          .json({ status: false, message: 'ID de l\'échéancier requis' });
       }
       const echeancierDoc = await this.collection.doc(id).get();
       if (!echeancierDoc.exists) {
         return res
           .status(404)
-          .json({ status: false, message: "Échéancier non trouvé" });
+          .json({ status: false, message: 'Échéancier non trouvé' });
       }
       const echeancierData = echeancierDoc.data();
       const echeancier = new Echeancier({
@@ -85,12 +85,12 @@ class EcheancierController {
       });
       return res.status(200).json({ status: true, data: echeancier.toJSON() });
     } catch (error) {
-      console.error("Erreur lors de la récupération de l'échéancier:", error);
+      console.error('Erreur lors de la récupération de l\'échéancier:', error);
       return res
         .status(500)
         .json({
           status: false,
-          message: "Erreur lors de la récupération de l'échéancier",
+          message: 'Erreur lors de la récupération de l\'échéancier',
           error: error.message,
         });
     }
@@ -104,14 +104,14 @@ class EcheancierController {
       if (!id) {
         return res
           .status(400)
-          .json({ status: false, message: "ID de l'échéancier requis" });
+          .json({ status: false, message: 'ID de l\'échéancier requis' });
       }
       const echeancierRef = this.collection.doc(id);
       const echeancierDoc = await echeancierRef.get();
       if (!echeancierDoc.exists) {
         return res
           .status(404)
-          .json({ status: false, message: "Échéancier non trouvé" });
+          .json({ status: false, message: 'Échéancier non trouvé' });
       }
       const updateData = { updatedAt: new Date() };
       if (student_id !== undefined) updateData.student_id = student_id;
@@ -125,16 +125,16 @@ class EcheancierController {
         .status(200)
         .json({
           status: true,
-          message: "Échéancier mis à jour avec succès",
+          message: 'Échéancier mis à jour avec succès',
           data: { id: updatedEcheancier.id, ...updatedEcheancier.data() },
         });
     } catch (error) {
-      console.error("Erreur lors de la mise à jour de l'échéancier:", error);
+      console.error('Erreur lors de la mise à jour de l\'échéancier:', error);
       return res
         .status(500)
         .json({
           status: false,
-          message: "Erreur lors de la mise à jour de l'échéancier",
+          message: 'Erreur lors de la mise à jour de l\'échéancier',
           error: error.message,
         });
     }
@@ -147,26 +147,26 @@ class EcheancierController {
       if (!id) {
         return res
           .status(400)
-          .json({ status: false, message: "ID de l'échéancier requis" });
+          .json({ status: false, message: 'ID de l\'échéancier requis' });
       }
       const echeancierRef = this.collection.doc(id);
       const echeancierDoc = await echeancierRef.get();
       if (!echeancierDoc.exists) {
         return res
           .status(404)
-          .json({ status: false, message: "Échéancier non trouvé" });
+          .json({ status: false, message: 'Échéancier non trouvé' });
       }
       await echeancierRef.delete();
       return res
         .status(200)
-        .json({ status: true, message: "Échéancier supprimé avec succès" });
+        .json({ status: true, message: 'Échéancier supprimé avec succès' });
     } catch (error) {
-      console.error("Erreur lors de la suppression de l'échéancier:", error);
+      console.error('Erreur lors de la suppression de l\'échéancier:', error);
       return res
         .status(500)
         .json({
           status: false,
-          message: "Erreur lors de la suppression de l'échéancier",
+          message: 'Erreur lors de la suppression de l\'échéancier',
           error: error.message,
         });
     }
