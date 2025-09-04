@@ -133,7 +133,6 @@ deploy_staging:
     url: https://$FIREBASE_PROJECT_STAGING_ID.web.app
   only:
     - test
-  when: manual
 
 # --- Deploy Production ---
 deploy_production:
@@ -149,4 +148,3 @@ deploy_production:
     url: https://$FIREBASE_PROJECT_ID.web.app
   only:
     - main
-  when: manual
