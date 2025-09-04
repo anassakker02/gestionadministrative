@@ -53,10 +53,9 @@ install_frontend_dependencies:
 # --- Lint Backend ---
 lint_backend:
   stage: lint
-  dependencies:
-    - install_backend_dependencies
   script:
-    - cd back
+    - cd back/functions
+    - npm install --prefer-offline --silent --production=false
     - npm run lint
   allow_failure: false
 
@@ -96,12 +95,10 @@ build_backend:
   dependencies:
     - install_backend_dependencies
   script:
-    - cd back
-    - npm run lint
-    - echo "Backend linted"
+    - echo "No build step for backend"
   artifacts:
     paths:
-      - back/dist/
+      - back
     expire_in: 2h
   only:
     - main
