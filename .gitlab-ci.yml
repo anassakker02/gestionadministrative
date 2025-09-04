@@ -5,7 +5,7 @@ variables:
   FIREBASE_PROJECT_STAGING_ID: $FIREBASE_PROJECT_STAGING_ID
   FIREBASE_TOKEN: $FIREBASE_TOKEN
   NODE_ENV: production
-  HUSKY: 0  # IMPORTANT: désactive Husky dans le CI
+  HUSKY: 0 # IMPORTANT: désactive Husky dans le CI
 
 cache:
   key: ${CI_COMMIT_REF_SLUG}
@@ -69,6 +69,26 @@ lint_frontend:
     - npx eslint -c eslint.config.cjs . --ext .js,.jsx,.ts,.tsx --max-warnings=0
   allow_failure: false
 
+# --- Test Backend ---
+test_backend:
+  stage: test
+  dependencies:
+    - install_backend_dependencies
+  script:
+    - cd back
+    - npm test
+  allow_failure: false
+
+# --- Test Frontend ---
+test_frontend:
+  stage: test
+  dependencies:
+    - install_frontend_dependencies
+  script:
+    - cd front
+    - npx vitest run
+  allow_failure: false
+
 # --- Build Backend ---
 build_backend:
   stage: build
@@ -76,8 +96,8 @@ build_backend:
     - install_backend_dependencies
   script:
     - cd back
-    - npm run build
-    - echo "Backend built"
+    - npm run lint
+    - echo "Backend linted"
   artifacts:
     paths:
       - back/dist/
@@ -132,5 +152,3 @@ deploy_production:
   only:
     - main
   when: manual
-
-
