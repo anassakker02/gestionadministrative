@@ -126,9 +126,10 @@ deploy_staging:
     - build_backend
     - build_frontend
   script:
-    - cd back
-    - firebase use $FIREBASE_PROJECT_STAGING_ID --token $FIREBASE_TOKEN
-    - firebase deploy --only functions --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_STAGING_ID
+    # installer les dépendances du dossier functions pour le lint prédeploy
+    - npm install --prefix functions --prefer-offline --production=false
+      - firebase use $FIREBASE_PROJECT_STAGING_ID --token $FIREBASE_TOKEN
+      - firebase deploy --only functions --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_STAGING_ID
   environment:
     name: staging
     url: https://$FIREBASE_PROJECT_STAGING_ID.web.app
@@ -142,9 +143,10 @@ deploy_production:
     - build_backend
     - build_frontend
   script:
-    - cd back
-    - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
-    - firebase deploy --only functions --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_ID
+    # installer les dépendances du dossier functions pour le lint prédeploy
+    - npm install --prefix functions --prefer-offline --production=false
+      - firebase use $FIREBASE_PROJECT_ID --token $FIREBASE_TOKEN
+      - firebase deploy --only functions --token $FIREBASE_TOKEN --project $FIREBASE_PROJECT_ID
   environment:
     name: production
     url: https://$FIREBASE_PROJECT_ID.web.app
