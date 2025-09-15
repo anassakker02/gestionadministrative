@@ -73,8 +73,8 @@ class EtudiantController {
         });
       }
 
-      // Vérifier que la bourse existe si elle est fournie
-      if (bourse_id) {
+      // Vérifier que la bourse existe si elle est fournie et non vide
+      if (bourse_id && bourse_id.trim() !== '') {
         const bourseRef = db.collection('bourses').doc(bourse_id);
         const bourseDoc = await bourseRef.get();
         if (!bourseDoc.exists) {
@@ -106,7 +106,7 @@ class EtudiantController {
         date_naissance: date_naissance,
         classe_id: classe_id,
         nationalite: nationalite.trim(),
-        bourse_id: bourse_id || null,
+        bourse_id: bourse_id && bourse_id.trim() !== '' ? bourse_id : null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };

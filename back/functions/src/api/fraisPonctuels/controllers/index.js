@@ -8,6 +8,7 @@ class FraisPonctuelController {
 
   // Créer un frais ponctuel
   async create(req, res) {
+    console.log("FraisPonctuelController: create method hit");
     try {
       const { facture_id, description, montant } = req.body;
       if (!facture_id || !description || montant === undefined) {
@@ -42,6 +43,7 @@ class FraisPonctuelController {
 
   // Récupérer tous les frais ponctuels
   async getAll(req, res) {
+    console.log("FraisPonctuelController: getAll method hit");
     try {
       const snapshot = await this.collection.orderBy('createdAt', 'desc').get();
       const fraisPonctuels = snapshot.docs.map((doc) => ({
