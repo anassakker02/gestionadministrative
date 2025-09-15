@@ -1,18 +1,20 @@
-import { ReactNode } from "react"
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { SchoolSidebar } from "./SchoolSidebar"
-import { motion } from "framer-motion"
+import { ReactNode } from "react";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SchoolSidebar } from "./SchoolSidebar";
+import { motion } from "framer-motion";
 
 interface SchoolLayoutProps {
-  children: ReactNode
+  children: ReactNode;
 }
 
 export function SchoolLayout({ children }: SchoolLayoutProps) {
+  const user = JSON.parse(localStorage.getItem("user") || "null");
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-secondary">
-        <SchoolSidebar />
-        
+        <SchoolSidebar userRole={user?.role} />
+
         <div className="flex-1 flex flex-col">
           <motion.header
             initial={{ y: -20, opacity: 0 }}
@@ -27,9 +29,27 @@ export function SchoolLayout({ children }: SchoolLayoutProps) {
               </h1>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="text-sm text-muted-foreground">
-                Bienvenue, Admin
-              </div>
+              {/* Affichage du nom, prénom et rôle */}
+              {(() => {
+                if (user) {
+                  return (
+                    <div className="flex flex-col text-end">
+                      <span className="font-semibold text-foreground">
+                        {user.nom} {user.prenom}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {user.role
+                          ? user.role.charAt(0).toUpperCase() +
+                            user.role.slice(1)
+                          : ""}
+                      </span>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="text-sm text-muted-foreground">Bienvenue</div>
+                );
+              })()}
             </div>
           </motion.header>
 
@@ -45,5 +65,5 @@ export function SchoolLayout({ children }: SchoolLayoutProps) {
         </div>
       </div>
     </SidebarProvider>
-  )
+  );
 }

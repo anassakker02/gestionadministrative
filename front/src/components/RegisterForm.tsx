@@ -1,33 +1,56 @@
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Eye, EyeOff, User, Mail, Lock, Building } from "lucide-react"
-import { Link } from "react-router-dom"
+import { useState } from "react";
+import { motion } from "framer-motion";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Eye, EyeOff, User, Mail, Lock, Building } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { apiRequest } from "@/lib/api";
 
 export function RegisterForm() {
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
     password: "",
     confirmPassword: "",
-    role: ""
-  })
+    // role n'est plus envoyé
+  });
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log("Tentative d'inscription:", formData)
-    // TODO: Logique d'inscription
-  }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      // Appel API d'inscription avec le bon endpoint backend
+      await apiRequest("/auth/register", "POST", {
+        nom: formData.lastName,
+        prenom: formData.firstName,
+        email: formData.email,
+        password: formData.password,
+        role: "student",
+      });
+      navigate("/dashboard");
+    } catch (err: any) {
+      alert(err?.message || "Erreur lors de l'inscription");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-  }
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
 
   return (
     <motion.div
@@ -47,12 +70,15 @@ export function RegisterForm() {
             Remplissez vos informations pour créer votre compte
           </CardDescription>
         </CardHeader>
-        
+
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="firstName" className="text-sm font-medium text-foreground">
+                <Label
+                  htmlFor="firstName"
+                  className="text-sm font-medium text-foreground"
+                >
                   Prénom
                 </Label>
                 <div className="relative">
@@ -62,15 +88,20 @@ export function RegisterForm() {
                     type="text"
                     placeholder="Votre prénom"
                     value={formData.firstName}
-                    onChange={(e) => handleInputChange("firstName", e.target.value)}
+                    onChange={(e) =>
+                      handleInputChange("firstName", e.target.value)
+                    }
                     className="pl-10 bg-background/50 border-primary/20 focus:border-primary transition-smooth"
                     required
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
-                <Label htmlFor="lastName" className="text-sm font-medium text-foreground">
+                <Label
+                  htmlFor="lastName"
+                  className="text-sm font-medium text-foreground"
+                >
                   Nom
                 </Label>
                 <div className="relative">
@@ -80,7 +111,9 @@ export function RegisterForm() {
                     type="text"
                     placeholder="Votre nom"
                     value={formData.lastName}
-                    onChange={(e) => handleInputChange("lastName", e.target.value)}
+                    onChange={(e) =>
+                      handleInputChange("lastName", e.target.value)
+                    }
                     className="pl-10 bg-background/50 border-primary/20 focus:border-primary transition-smooth"
                     required
                   />
@@ -89,7 +122,10 @@ export function RegisterForm() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-foreground">
+              <Label
+                htmlFor="email"
+                className="text-sm font-medium text-foreground"
+              >
                 Adresse email
               </Label>
               <div className="relative">
@@ -106,29 +142,13 @@ export function RegisterForm() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="role" className="text-sm font-medium text-foreground">
-                Rôle
-              </Label>
-              <div className="relative">
-                <Building className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <select
-                  id="role"
-                  value={formData.role}
-                  onChange={(e) => handleInputChange("role", e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 bg-background/50 border border-primary/20 rounded-md focus:border-primary transition-smooth text-foreground"
-                  required
-                >
-                  <option value="">Sélectionnez votre rôle</option>
-                  <option value="admin">Administrateur</option>
-                  <option value="teacher">Enseignant</option>
-                  <option value="student">Étudiant</option>
-                </select>
-              </div>
-            </div>
+            {/* Le rôle est forcé à 'student' et le champ n'est plus affiché */}
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium text-foreground">
+              <Label
+                htmlFor="password"
+                className="text-sm font-medium text-foreground"
+              >
                 Mot de passe
               </Label>
               <div className="relative">
@@ -138,7 +158,9 @@ export function RegisterForm() {
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   value={formData.password}
-                  onChange={(e) => handleInputChange("password", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("password", e.target.value)
+                  }
                   className="pl-10 pr-10 bg-background/50 border-primary/20 focus:border-primary transition-smooth"
                   required
                 />
@@ -147,13 +169,20 @@ export function RegisterForm() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-3 text-muted-foreground hover:text-foreground transition-smooth"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
                 </button>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-sm font-medium text-foreground">
+              <Label
+                htmlFor="confirmPassword"
+                className="text-sm font-medium text-foreground"
+              >
                 Confirmer le mot de passe
               </Label>
               <div className="relative">
@@ -163,7 +192,9 @@ export function RegisterForm() {
                   type={showConfirmPassword ? "text" : "password"}
                   placeholder="••••••••"
                   value={formData.confirmPassword}
-                  onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("confirmPassword", e.target.value)
+                  }
                   className="pl-10 pr-10 bg-background/50 border-primary/20 focus:border-primary transition-smooth"
                   required
                 />
@@ -172,7 +203,11 @@ export function RegisterForm() {
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3 top-3 text-muted-foreground hover:text-foreground transition-smooth"
                 >
-                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
                 </button>
               </div>
             </div>
@@ -180,8 +215,9 @@ export function RegisterForm() {
             <Button
               type="submit"
               className="w-full bg-gradient-primary hover:bg-primary/90 text-white font-semibold py-2 px-4 rounded-md transition-smooth shadow-lg hover:shadow-primary/25"
+              disabled={loading}
             >
-              Créer le compte
+              {loading ? "Création..." : "Créer le compte"}
             </Button>
 
             <div className="text-center space-y-2">
@@ -199,5 +235,5 @@ export function RegisterForm() {
         </CardContent>
       </Card>
     </motion.div>
-  )
+  );
 }

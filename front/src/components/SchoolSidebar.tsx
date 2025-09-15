@@ -8,8 +8,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from "@/components/ui/sidebar"
-import { NavLink, useLocation } from "react-router-dom"
+} from "@/components/ui/sidebar";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   Users,
   GraduationCap,
@@ -23,24 +23,24 @@ import {
   BookOpen,
   Award,
   LayoutDashboard,
-} from "lucide-react"
+  LogOut,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 
 const menuItems = [
   {
     title: "Principal",
     items: [
-      { title: "Tableau de bord", url: "/", icon: LayoutDashboard },
-    ]
+      { title: "Tableau de bord", url: "/dashboard", icon: LayoutDashboard },
+    ],
   },
   {
     title: "Gestion des Étudiants",
     items: [
       { title: "Étudiants", url: "/students", icon: GraduationCap },
       { title: "Classes", url: "/classes", icon: BookOpen },
-      { title: "Enseignants", url: "/teachers", icon: UserCheck },
-      { title: "Matières", url: "/subjects", icon: Award },
-      { title: "Emploi du temps", url: "/schedule", icon: Calendar },
-    ]
+      { title: "Emploi du temps", url: "/schedules", icon: Calendar },
+    ],
   },
   {
     title: "Gestion Financière",
@@ -50,43 +50,83 @@ const menuItems = [
       { title: "Paiements", url: "/payments", icon: CreditCard },
       { title: "Échéanciers", url: "/schedules", icon: Calendar },
       { title: "Frais Ponctuels", url: "/fees", icon: DollarSign },
-    ]
+    ],
   },
   {
     title: "Aide & Suivi",
     items: [
-      { title: "Bourses", url: "/scholarships", icon: Award },
-      { title: "Relances", url: "/reminders", icon: Bell },
-    ]
+      { title: "Bourses", url: "/bourses", icon: Award },
+      { title: "Relances", url: "/relances", icon: Bell },
+    ],
   },
   {
     title: "Administration",
     items: [
       { title: "Utilisateurs", url: "/users", icon: UserCheck },
       { title: "Paramètres", url: "/settings", icon: Settings },
-    ]
+    ],
+  },
+  {
+    title: "Compte",
+    items: [
+      { title: "Profil", url: "/profile", icon: UserCheck },
+      { title: "Déconnexion", url: "/logout", icon: LogOut },
+    ],
+  },
+];
+
+export function SchoolSidebar({ userRole }: { userRole?: string }) {
+  const { state } = useSidebar();
+  const location = useLocation();
+  const collapsed = state === "collapsed";
+
+  // Filtrer les menus selon le rôle
+  let filteredMenuItems = [];
+  if (!userRole) {
+    filteredMenuItems = [menuItems[menuItems.length - 1]]; // just Profil/Déconnexion
+  } else if (userRole === "admin") {
+    filteredMenuItems = menuItems; // admin : tout voir
+  } else if (userRole === "etudiant") {
+    const studentAllowedItems = new Set([
+      "Tableau de bord",
+      "Profil",
+      "Bourses",
+      "Factures",
+    ]);
+
+    filteredMenuItems = menuItems
+      .map((section) => {
+        const filteredSectionItems = section.items.filter((item) =>
+          studentAllowedItems.has(item.title)
+        );
+        return {
+          ...section,
+          items: filteredSectionItems,
+        };
+      })
+      .filter((section) => section.items.length > 0); // Remove sections that are empty after filtering items
+  } else {
+    filteredMenuItems = menuItems.filter(
+      (section) => section.title !== "Administration"
+    ); // autres rôles : tout sauf admin
   }
-]
 
-export function SchoolSidebar() {
-  const { state } = useSidebar()
-  const location = useLocation()
-  const collapsed = state === "collapsed"
-
-  const isActive = (path: string) => location.pathname === path
+  const isActive = (path: string) => location.pathname === path;
 
   return (
     <Sidebar className={collapsed ? "w-16" : "w-64"} collapsible="icon">
       <SidebarContent className="bg-sidebar">
         <div className="p-4 border-b border-sidebar-border">
-          <h2 className={`font-bold text-sidebar-foreground transition-all ${
-            collapsed ? "text-xs text-center" : "text-lg"
-          }`}>
+          <h2
+            className={`font-bold text-sidebar-foreground transition-all ${
+              collapsed ? "text-xs text-center" : "text-lg"
+            }`}
+          >
             {collapsed ? "YC" : "YNOV Campus"}
           </h2>
         </div>
 
-        {menuItems.map((section) => (
+        {filteredMenuItems.map((section) => (
           <SidebarGroup key={section.title}>
             {!collapsed && (
               <SidebarGroupLabel className="text-sidebar-foreground/70">
@@ -122,5 +162,5 @@ export function SchoolSidebar() {
         ))}
       </SidebarContent>
     </Sidebar>
-  )
+  );
 }

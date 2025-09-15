@@ -1,22 +1,42 @@
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { motion } from "framer-motion"
-import { Eye, EyeOff } from "lucide-react"
-import { Link } from "react-router-dom"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { motion } from "framer-motion";
+import { Eye, EyeOff } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function LoginForm() {
-  const [showPassword, setShowPassword] = useState(false)
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const navigate = useNavigate();
+  const { login } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Handle login logic here
-    console.log("Login attempt:", { email, password })
-  }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      const success = await login({ email, password });
+      if (success) {
+        navigate("/dashboard");
+      }
+    } catch (error) {
+      console.error("Erreur lors de la connexion:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <motion.div
@@ -111,8 +131,9 @@ export function LoginForm() {
               <Button
                 type="submit"
                 className="w-full h-12 text-lg font-semibold bg-gradient-hero hover:opacity-90 transition-opacity shadow-glow"
+                disabled={loading}
               >
-                Se connecter
+                {loading ? "Connexion..." : "Se connecter"}
               </Button>
             </motion.div>
           </form>
@@ -143,5 +164,5 @@ export function LoginForm() {
         </CardContent>
       </Card>
     </motion.div>
-  )
+  );
 }
