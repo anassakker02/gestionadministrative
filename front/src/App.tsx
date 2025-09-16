@@ -18,11 +18,12 @@ import Factures from "./pages/Factures";
 import Profile from "./pages/Profile";
 import Logout from "./pages/Logout";
 import Tarifs from "./pages/Tarifs";
-import Bourses from "./pages/Bourses"; // Assuming Bourses page exists
-import Relances from "./pages/Relances"; // Assuming Relances page exists
-import Users from "./pages/Users"; // Assuming Users page exists
-import Settings from "./pages/Settings"; // Assuming Settings page exists
-import FraisPonctuels from "./pages/FraisPonctuels"; // Assuming FraisPonctuels page exists
+import Bourses from "./pages/Bourses";
+import Relances from "./pages/Relances";
+import Users from "./pages/Users";
+import Settings from "./pages/Settings";
+import FraisPonctuels from "./pages/FraisPonctuels";
+import Echeanciers from "./pages/Echeanciers";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
@@ -92,6 +93,16 @@ const App = () => (
               }
             />
             <Route
+              path="/echeanciers"
+              element={
+                <ProtectedRoute roles={["admin", "comptable"]}>
+                  <SchoolLayout>
+                    <Echeanciers />
+                  </SchoolLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/schedules"
               element={
                 <ProtectedRoute>
@@ -155,7 +166,7 @@ const App = () => (
             <Route
               path="/relances"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute roles={["admin", "comptable"]}>
                   <SchoolLayout>
                     <Relances />
                   </SchoolLayout>

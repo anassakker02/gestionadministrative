@@ -5,7 +5,7 @@ export interface User {
   nom: string;
   prenom: string;
   email: string;
-  role: 'etudiant' | 'comptable' | 'admin';
+  role: "etudiant" | "comptable" | "admin";
   telephone?: string;
   classe_id?: string;
   status?: string;
@@ -29,11 +29,19 @@ export interface RegisterData {
 export const userService = {
   // Authentification
   login: async (credentials: LoginCredentials) => {
-    return await apiRequest("/auth/login", "POST", credentials as unknown as Record<string, unknown>);
+    return await apiRequest(
+      "/auth/login",
+      "POST",
+      credentials as unknown as Record<string, unknown>
+    );
   },
 
   register: async (data: RegisterData) => {
-    return await apiRequest("/auth/register", "POST", data as unknown as Record<string, unknown>);
+    return await apiRequest(
+      "/auth/register",
+      "POST",
+      data as unknown as Record<string, unknown>
+    );
   },
 
   logout: async () => {
@@ -49,7 +57,10 @@ export const userService = {
     return await apiRequest(`/users/${userId}`, "PUT", data);
   },
 
-  changePassword: async (userId: string, passwords: { oldPassword: string; newPassword: string }) => {
+  changePassword: async (
+    userId: string,
+    passwords: { oldPassword: string; newPassword: string }
+  ) => {
     return await apiRequest(`/users/${userId}/password`, "PUT", passwords);
   },
 
@@ -62,3 +73,12 @@ export const userService = {
     return await apiRequest(`/users/${userId}`, "DELETE");
   },
 };
+
+export async function blockUser(userId: string, blocked: boolean) {
+  // Exemple d'appel API, à adapter selon votre backend
+  return fetch(`/api/users/${userId}/block`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ blocked }),
+  }).then((res) => res.json());
+}

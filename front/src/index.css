@@ -18,11 +18,11 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 215 25% 27%;
 
-    /* YNOV Professional Blue-Teal Brand Colors */
-    --primary: 190 88% 50%;
+    /* School Management Teal Brand Colors - Based on reference design */
+    --primary: 174 91% 39%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 190 88% 45%;
-    --primary-glow: 190 88% 60%;
+    --primary-hover: 174 91% 35%;
+    --primary-glow: 174 91% 45%;
 
     --secondary: 210 11% 96%;
     --secondary-foreground: 215 25% 27%;
@@ -30,7 +30,7 @@ All colors MUST be HSL.
     --muted: 210 11% 96%;
     --muted-foreground: 215 13% 65%;
 
-    --accent: 190 88% 50%;
+    --accent: 174 91% 39%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -38,7 +38,7 @@ All colors MUST be HSL.
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 190 88% 50%;
+    --ring: 174 91% 39%;
 
     --radius: 0.75rem;
 
@@ -51,25 +51,25 @@ All colors MUST be HSL.
     --info-foreground: 0 0% 100%;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(190 88% 50%), hsl(190 88% 60%));
+    --gradient-primary: linear-gradient(135deg, hsl(174 91% 39%), hsl(174 91% 45%));
     --gradient-secondary: linear-gradient(135deg, hsl(210 11% 96%), hsl(0 0% 100%));
-    --gradient-hero: linear-gradient(135deg, hsl(190 88% 50%) 0%, hsl(217 91% 60%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(174 91% 39%) 0%, hsl(217 91% 60%) 100%);
 
     /* Shadows */
-    --shadow-sm: 0 1px 2px 0 hsl(190 88% 50% / 0.08);
-    --shadow-md: 0 4px 6px -1px hsl(190 88% 50% / 0.15), 0 2px 4px -1px hsl(190 88% 50% / 0.1);
-    --shadow-lg: 0 10px 15px -3px hsl(190 88% 50% / 0.15), 0 4px 6px -2px hsl(190 88% 50% / 0.08);
-    --shadow-glow: 0 0 30px hsl(190 88% 50% / 0.4);
+    --shadow-sm: 0 1px 2px 0 hsl(174 91% 39% / 0.08);
+    --shadow-md: 0 4px 6px -1px hsl(174 91% 39% / 0.15), 0 2px 4px -1px hsl(174 91% 39% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(174 91% 39% / 0.15), 0 4px 6px -2px hsl(174 91% 39% / 0.08);
+    --shadow-glow: 0 0 30px hsl(174 91% 39% / 0.4);
 
     /* Sidebar */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 215 25% 27%;
-    --sidebar-primary: 190 88% 50%;
+    --sidebar-primary: 174 91% 39%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 210 11% 96%;
     --sidebar-accent-foreground: 215 25% 27%;
     --sidebar-border: 214 32% 91%;
-    --sidebar-ring: 190 88% 50%;
+    --sidebar-ring: 174 91% 39%;
   }
 
   .dark {

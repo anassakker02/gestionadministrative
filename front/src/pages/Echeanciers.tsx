@@ -1,5 +1,5 @@
 import React from "react";
-import { useQuery, useMutation, useQueryClient } from "react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getEcheanciers,
   createEcheancier,
@@ -9,18 +9,21 @@ import {
 
 const Echeanciers = () => {
   const queryClient = useQueryClient();
-  const { data: echeanciers, isLoading } = useQuery(
-    "echeanciers",
-    getEcheanciers
-  );
-  const createMutation = useMutation(createEcheancier, {
-    onSuccess: () => queryClient.invalidateQueries("echeanciers"),
+  const { data: echeanciers, isLoading } = useQuery({
+    queryKey: ["echeanciers"],
+    queryFn: getEcheanciers,
   });
-  const updateMutation = useMutation(updateEcheancier, {
-    onSuccess: () => queryClient.invalidateQueries("echeanciers"),
+  const createMutation = useMutation({
+    mutationFn: createEcheancier,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["echeanciers"] }),
   });
-  const deleteMutation = useMutation(deleteEcheancier, {
-    onSuccess: () => queryClient.invalidateQueries("echeanciers"),
+  const updateMutation = useMutation({
+    mutationFn: ({ id, echeancier }: { id: string; echeancier: any }) => updateEcheancier(id, echeancier),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["echeanciers"] }),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: deleteEcheancier,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["echeanciers"] }),
   });
 
   // TODO: Add form and UI logic for CRUD

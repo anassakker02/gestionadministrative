@@ -48,7 +48,7 @@ const menuItems = [
       { title: "Tarifs", url: "/tarifs", icon: DollarSign },
       { title: "Factures", url: "/factures", icon: Receipt },
       { title: "Paiements", url: "/payments", icon: CreditCard },
-      { title: "Échéanciers", url: "/schedules", icon: Calendar },
+      { title: "Échéanciers", url: "/echeanciers", icon: Calendar },
       { title: "Frais Ponctuels", url: "/fees", icon: DollarSign },
     ],
   },
@@ -89,9 +89,10 @@ export function SchoolSidebar({ userRole }: { userRole?: string }) {
   } else if (userRole === "etudiant") {
     const studentAllowedItems = new Set([
       "Tableau de bord",
-      "Profil",
-      "Bourses",
       "Factures",
+      "Bourses",
+      "Profil",
+      "Déconnexion",
     ]);
 
     filteredMenuItems = menuItems
@@ -105,6 +106,32 @@ export function SchoolSidebar({ userRole }: { userRole?: string }) {
         };
       })
       .filter((section) => section.items.length > 0); // Remove sections that are empty after filtering items
+  } else if (userRole === "comptable") {
+    const comptableAllowedItems = new Set([
+      "Tableau de bord",
+      "Étudiants",
+      "Classes",
+      "Tarifs",
+      "Factures", 
+      "Paiements",
+      "Échéanciers",
+      "Frais Ponctuels",
+      "Relances",
+      "Profil",
+      "Déconnexion",
+    ]);
+
+    filteredMenuItems = menuItems
+      .map((section) => {
+        const filteredSectionItems = section.items.filter((item) =>
+          comptableAllowedItems.has(item.title)
+        );
+        return {
+          ...section,
+          items: filteredSectionItems,
+        };
+      })
+      .filter((section) => section.items.length > 0);
   } else {
     filteredMenuItems = menuItems.filter(
       (section) => section.title !== "Administration"

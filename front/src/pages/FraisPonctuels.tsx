@@ -20,7 +20,7 @@ const FraisPonctuels = () => {
     },
   });
   const updateMutation = useMutation({
-    mutationFn: updateFraisPonctuel,
+    mutationFn: ({ id, fraisPonctuel }: { id: string; fraisPonctuel: any }) => updateFraisPonctuel(id, fraisPonctuel),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["fraisPonctuels"] });
     },

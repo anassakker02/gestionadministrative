@@ -21,7 +21,7 @@ const Tarifs = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tarifs"] }),
   });
   const updateMutation = useMutation({
-    mutationFn: updateTarif,
+    mutationFn: ({ id, tarif }: { id: string; tarif: any }) => updateTarif(id, tarif),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tarifs"] }),
   });
   const deleteMutation = useMutation({

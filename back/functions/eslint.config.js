@@ -1,5 +1,5 @@
 // eslint.config.js
-export default [
+module.exports = [
   // Ignorer certains dossiers
   { ignores: ["lib", "node_modules"] },
 
@@ -15,4 +15,3 @@ export default [
     },
   },
 ];
-
