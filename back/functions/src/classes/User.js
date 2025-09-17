@@ -4,14 +4,17 @@ class User {
   constructor(data) {
     this.id = data.id;
     this.nom = data.nom;
-    this.prenom = data.prenom;
+    this.prenom = data.prenom || null;
     this.email = data.email;
     this.password = data.password;
-    this.role = data.role; // admin, comptable, étudiant
-    this.telephone = data.telephone;
-    this.adresse = data.adresse;
+    this.role = data.role; // admin, comptable, étudiant, famille
+    this.telephone = data.telephone || null;
+    this.adresse = data.adresse || null;
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || new Date();
+    this.isActive = data.isActive === undefined ? true : data.isActive;
+    this.emailNotifications = data.emailNotifications === undefined ? true : data.emailNotifications;
+    this.smsNotifications = data.smsNotifications === undefined ? true : data.smsNotifications;
   }
 
   async hashPassword() {
@@ -40,6 +43,9 @@ class User {
       adresse: this.adresse,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
+      isActive: this.isActive,
+      emailNotifications: this.emailNotifications,
+      smsNotifications: this.smsNotifications,
     };
   }
 }

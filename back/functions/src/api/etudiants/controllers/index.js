@@ -1,9 +1,12 @@
-const Etudiant = require('../../../classes/Etudiant');
-const db = require('../../../config/firebase');
+const Etudiant = require("../../../classes/Etudiant");
+const db = require("../../../config/firebase");
+const AuditLog = require("../../../classes/AuditLog");
+const { sendWebhook } = require('../../../utils/webhookSender');
+const { encrypt, decrypt } = require('../../../utils/encryption');
 
 class EtudiantController {
   constructor() {
-    this.collection = db.collection('etudiants');
+    this.collection = db.collection("etudiants");
   }
 
   /**
@@ -12,13 +15,15 @@ class EtudiantController {
    */
   async create(req, res) {
     try {
-      const { nom, prenom, date_naissance, classe_id, nationalite, bourse_id } = req.body;
+      const { nom, prenom, date_naissance, classe_id, nationalite, bourse_id, exemptions, parentId } =
+        req.body;
 
       // Validation des données obligatoires
       if (!nom || !prenom || !date_naissance || !classe_id || !nationalite) {
         return res.status(400).json({
           status: false,
-          message: 'Le nom, prénom, date de naissance, classe et nationalité sont requis',
+          message:
+            "Le nom, prénom, date de naissance, classe et nationalité sont requis",
         });
       }
 
@@ -26,7 +31,7 @@ class EtudiantController {
       if (nom.trim().length < 2) {
         return res.status(400).json({
           status: false,
-          message: 'Le nom doit contenir au moins 2 caractères',
+          message: "Le nom doit contenir au moins 2 caractères",
         });
       }
 
@@ -34,7 +39,7 @@ class EtudiantController {
       if (prenom.trim().length < 2) {
         return res.status(400).json({
           status: false,
-          message: 'Le prénom doit contenir au moins 2 caractères',
+          message: "Le prénom doit contenir au moins 2 caractères",
         });
       }
 
@@ -43,7 +48,7 @@ class EtudiantController {
       if (isNaN(dateNaissance.getTime())) {
         return res.status(400).json({
           status: false,
-          message: 'Format de date invalide',
+          message: "Format de date invalide",
         });
       }
 
@@ -51,53 +56,84 @@ class EtudiantController {
       const aujourd = new Date();
       let age = aujourd.getFullYear() - dateNaissance.getFullYear();
       const moisDiff = aujourd.getMonth() - dateNaissance.getMonth();
-      
-      if (moisDiff < 0 || (moisDiff === 0 && aujourd.getDate() < dateNaissance.getDate())) {
+
+      if (
+        moisDiff < 0 ||
+        (moisDiff === 0 && aujourd.getDate() < dateNaissance.getDate())
+      ) {
         age--;
       }
 
-      if (age < 3 || age > 25) {
+      if (age < 18 || age > 36) {
         return res.status(400).json({
           status: false,
-          message: 'L\'âge doit être entre 3 et 25 ans',
+          message: "L'âge doit être entre 3 et 25 ans",
         });
       }
 
       // Vérifier que la classe existe
-      const classeRef = db.collection('classes').doc(classe_id);
+      const classeRef = db.collection("classes").doc(classe_id);
       const classeDoc = await classeRef.get();
       if (!classeDoc.exists) {
         return res.status(400).json({
           status: false,
-          message: 'La classe spécifiée n\'existe pas',
+          message: "La classe spécifiée n'existe pas",
         });
       }
 
       // Vérifier que la bourse existe si elle est fournie et non vide
-      if (bourse_id && bourse_id.trim() !== '') {
-        const bourseRef = db.collection('bourses').doc(bourse_id);
+      if (bourse_id && bourse_id.trim() !== "") {
+        const bourseRef = db.collection("bourses").doc(bourse_id);
         const bourseDoc = await bourseRef.get();
         if (!bourseDoc.exists) {
           return res.status(400).json({
             status: false,
-            message: 'La bourse spécifiée n\'existe pas',
+            message: "La bourse spécifiée n'existe pas",
           });
         }
       }
 
       // Vérifier l'unicité nom + prénom + date de naissance
-      const existingEtudiant = await db.collection('etudiants')
-        .where('nom', '==', nom.trim())
-        .where('prenom', '==', prenom.trim())
-        .where('date_naissance', '==', date_naissance)
+      const existingEtudiant = await db
+        .collection("etudiants")
+        .where("nom", "==", nom.trim())
+        .where("prenom", "==", prenom.trim())
+        .where("date_naissance", "==", date_naissance)
         .get();
 
       if (!existingEtudiant.empty) {
         return res.status(409).json({
           status: false,
-          message: 'Un étudiant avec ces informations existe déjà',
+          message: "Un étudiant avec ces informations existe déjà",
         });
       }
+
+      // Récupérer le tarif correspondant
+      const tarifsRef = db.collection("tarifs");
+      let tarifQuery = tarifsRef
+        .where("classe_id", "==", classe_id)
+        .where("nationalite", "==", nationalite);
+
+      if (bourse_id && bourse_id.trim() !== "") {
+        tarifQuery = tarifQuery.where("bourse_id", "==", bourse_id);
+      }
+
+      const tarifSnapshot = await tarifQuery.get();
+      let tarif = null;
+      if (!tarifSnapshot.empty) {
+        tarif = tarifSnapshot.docs[0].data();
+        tarif.id = tarifSnapshot.docs[0].id;
+      }
+
+      // Calculer le montant final avec réduction
+      let montantFinal = tarif ? tarif.montant : 0;
+      let reductions = tarif && tarif.reductions ? tarif.reductions : [];
+      reductions.forEach((r) => {
+        if (r.type === "bourse" || r.type === "remise") {
+          montantFinal -= r.valeur;
+        }
+      });
+      if (montantFinal < 0) montantFinal = 0;
 
       // Créer le nouvel étudiant
       const etudiantData = {
@@ -106,7 +142,12 @@ class EtudiantController {
         date_naissance: date_naissance,
         classe_id: classe_id,
         nationalite: nationalite.trim(),
-        bourse_id: bourse_id && bourse_id.trim() !== '' ? bourse_id : null,
+        bourse_id: bourse_id && bourse_id.trim() !== "" ? bourse_id : null,
+        exemptions: exemptions ? encrypt(JSON.stringify(exemptions)) : [], // Add exemptions, encrypt them
+        parentId: parentId ? encrypt(parentId) : null, // Add parentId, encrypt it
+        tarif_id: tarif ? tarif.id : null,
+        montant_tarif: montantFinal,
+        reductions: reductions,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -114,19 +155,32 @@ class EtudiantController {
       const docRef = await this.collection.add(etudiantData);
       const newEtudiant = await docRef.get();
 
+      // Audit log
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'CREATE_ETUDIANT',
+        entityType: 'Etudiant',
+        entityId: newEtudiant.id,
+        details: { newEtudiantData: newEtudiant.data() },
+      });
+      await auditLog.save();
+
+      // Send webhook notification
+      await sendWebhook('student.created', { studentId: newEtudiant.id, ...newEtudiant.data() });
+
       return res.status(201).json({
         status: true,
-        message: 'Étudiant créé avec succès',
+        message: "Étudiant créé avec succès",
         data: {
           id: newEtudiant.id,
           ...newEtudiant.data(),
         },
       });
     } catch (error) {
-      console.error('Erreur lors de la création de l\'étudiant:', error);
+      console.error("Erreur lors de la création de l'étudiant:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur interne du serveur',
+        message: "Erreur interne du serveur",
         error: error.message,
       });
     }
@@ -138,23 +192,30 @@ class EtudiantController {
    */
   async getAll(req, res) {
     try {
-      const { page = 1, limit = 10, search, classe_id, bourse_id, nationalite } = req.query;
+      const {
+        page = 1,
+        limit = 10,
+        search,
+        classe_id,
+        bourse_id,
+        nationalite,
+      } = req.query;
       const pageNumber = parseInt(page);
       const limitNumber = parseInt(limit);
 
-      let query = this.collection.orderBy('createdAt', 'desc');
+      let query = this.collection.orderBy("createdAt", "desc");
 
       // Filtres
       if (classe_id) {
-        query = query.where('classe_id', '==', classe_id);
+        query = query.where("classe_id", "==", classe_id);
       }
 
       if (bourse_id) {
-        query = query.where('bourse_id', '==', bourse_id);
+        query = query.where("bourse_id", "==", bourse_id);
       }
 
       if (nationalite) {
-        query = query.where('nationalite', '==', nationalite);
+        query = query.where("nationalite", "==", nationalite);
       }
 
       // Recherche par nom ou prénom
@@ -162,8 +223,9 @@ class EtudiantController {
         const searchTerm = search.trim();
         // Note: Firestore ne supporte pas les recherches OR complexes
         // On utilise une approche simple avec le nom
-        query = query.where('nom', '>=', searchTerm)
-          .where('nom', '<=', searchTerm + '\uf8ff');
+        query = query
+          .where("nom", ">=", searchTerm)
+          .where("nom", "<=", searchTerm + "\uf8ff");
       }
 
       // Pagination
@@ -171,15 +233,18 @@ class EtudiantController {
       const snapshot = await query.limit(limitNumber).offset(offset).get();
 
       const etudiants = [];
-      
+
       // Récupérer les données complètes avec les relations
       for (const doc of snapshot.docs) {
         const etudiantData = doc.data();
-        
+
         // Récupérer les informations de la classe
         let classeInfo = null;
         if (etudiantData.classe_id) {
-          const classeDoc = await db.collection('classes').doc(etudiantData.classe_id).get();
+          const classeDoc = await db
+            .collection("classes")
+            .doc(etudiantData.classe_id)
+            .get();
           if (classeDoc.exists) {
             classeInfo = { id: classeDoc.id, ...classeDoc.data() };
           }
@@ -188,10 +253,26 @@ class EtudiantController {
         // Récupérer les informations de la bourse
         let bourseInfo = null;
         if (etudiantData.bourse_id) {
-          const bourseDoc = await db.collection('bourses').doc(etudiantData.bourse_id).get();
+          const bourseDoc = await db
+            .collection("bourses")
+            .doc(etudiantData.bourse_id)
+            .get();
           if (bourseDoc.exists) {
             bourseInfo = { id: bourseDoc.id, ...bourseDoc.data() };
           }
+        }
+
+        // Decrypt sensitive fields
+        if (etudiantData.exemptions && etudiantData.exemptions.length > 0) {
+            try {
+                etudiantData.exemptions = JSON.parse(decrypt(etudiantData.exemptions));
+            } catch (e) {
+                console.error("Error decrypting exemptions for student", doc.id, e);
+                etudiantData.exemptions = []; // Fallback to empty array on error
+            }
+        }
+        if (etudiantData.parentId) {
+            etudiantData.parentId = decrypt(etudiantData.parentId);
         }
 
         etudiants.push({
@@ -217,10 +298,10 @@ class EtudiantController {
         },
       });
     } catch (error) {
-      console.error('Erreur lors de la récupération des étudiants:', error);
+      console.error("Erreur lors de la récupération des étudiants:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur lors de la récupération des étudiants',
+        message: "Erreur lors de la récupération des étudiants",
         error: error.message,
       });
     }
@@ -237,7 +318,7 @@ class EtudiantController {
       if (!id) {
         return res.status(400).json({
           status: false,
-          message: 'ID de l\'étudiant requis',
+          message: "ID de l'étudiant requis",
         });
       }
 
@@ -246,7 +327,7 @@ class EtudiantController {
       if (!etudiantDoc.exists) {
         return res.status(404).json({
           status: false,
-          message: 'Étudiant non trouvé',
+          message: "Étudiant non trouvé",
         });
       }
 
@@ -255,7 +336,10 @@ class EtudiantController {
       // Récupérer les informations de la classe
       let classeInfo = null;
       if (etudiantData.classe_id) {
-        const classeDoc = await db.collection('classes').doc(etudiantData.classe_id).get();
+        const classeDoc = await db
+          .collection("classes")
+          .doc(etudiantData.classe_id)
+          .get();
         if (classeDoc.exists) {
           classeInfo = { id: classeDoc.id, ...classeDoc.data() };
         }
@@ -264,10 +348,26 @@ class EtudiantController {
       // Récupérer les informations de la bourse
       let bourseInfo = null;
       if (etudiantData.bourse_id) {
-        const bourseDoc = await db.collection('bourses').doc(etudiantData.bourse_id).get();
+        const bourseDoc = await db
+          .collection("bourses")
+          .doc(etudiantData.bourse_id)
+          .get();
         if (bourseDoc.exists) {
           bourseInfo = { id: bourseDoc.id, ...bourseDoc.data() };
         }
+      }
+
+      // Decrypt sensitive fields
+      if (etudiantData.exemptions && etudiantData.exemptions.length > 0) {
+          try {
+              etudiantData.exemptions = JSON.parse(decrypt(etudiantData.exemptions));
+          } catch (e) {
+              console.error("Error decrypting exemptions for student", id, e);
+              etudiantData.exemptions = []; // Fallback to empty array on error
+          }
+      }
+      if (etudiantData.parentId) {
+          etudiantData.parentId = decrypt(etudiantData.parentId);
       }
 
       const etudiant = new Etudiant({
@@ -284,10 +384,10 @@ class EtudiantController {
         },
       });
     } catch (error) {
-      console.error('Erreur lors de la récupération de l\'étudiant:', error);
+      console.error("Erreur lors de la récupération de l'étudiant:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur lors de la récupération de l\'étudiant',
+        message: "Erreur lors de la récupération de l'étudiant",
         error: error.message,
       });
     }
@@ -300,12 +400,13 @@ class EtudiantController {
   async update(req, res) {
     try {
       const { id } = req.params;
-      const { nom, prenom, date_naissance, classe_id, nationalite, bourse_id } = req.body;
+      const { nom, prenom, date_naissance, classe_id, nationalite, bourse_id, exemptions, parentId } =
+        req.body;
 
       if (!id) {
         return res.status(400).json({
           status: false,
-          message: 'ID de l\'étudiant requis',
+          message: "ID de l'étudiant requis",
         });
       }
 
@@ -316,24 +417,26 @@ class EtudiantController {
       if (!etudiantDoc.exists) {
         return res.status(404).json({
           status: false,
-          message: 'Étudiant non trouvé',
+          message: "Étudiant non trouvé",
         });
       }
 
       const currentData = etudiantDoc.data();
 
+      const oldEtudiantData = etudiantDoc.data(); // Get old data for audit log
+
       // Validation des données
       if (nom !== undefined && (!nom || nom.trim().length < 2)) {
         return res.status(400).json({
           status: false,
-          message: 'Le nom doit contenir au moins 2 caractères',
+          message: "Le nom doit contenir au moins 2 caractères",
         });
       }
 
       if (prenom !== undefined && (!prenom || prenom.trim().length < 2)) {
         return res.status(400).json({
           status: false,
-          message: 'Le prénom doit contenir au moins 2 caractères',
+          message: "Le prénom doit contenir au moins 2 caractères",
         });
       }
 
@@ -342,33 +445,36 @@ class EtudiantController {
         if (isNaN(birthDate.getTime())) {
           return res.status(400).json({
             status: false,
-            message: 'Format de date invalide',
+            message: "Format de date invalide",
           });
         }
 
         const today = new Date();
         let age = today.getFullYear() - birthDate.getFullYear();
         const moisDiff = today.getMonth() - birthDate.getMonth();
-        if (moisDiff < 0 || (moisDiff === 0 && today.getDate() < birthDate.getDate())) {
+        if (
+          moisDiff < 0 ||
+          (moisDiff === 0 && today.getDate() < birthDate.getDate())
+        ) {
           age--;
         }
 
         if (age < 3 || age > 25) {
           return res.status(400).json({
             status: false,
-            message: 'L\'âge doit être entre 3 et 25 ans',
+            message: "L'âge doit être entre 3 et 25 ans",
           });
         }
       }
 
       // Vérifier que la classe existe si elle est mise à jour
       if (classe_id && classe_id !== currentData.classe_id) {
-        const classeRef = db.collection('classes').doc(classe_id);
+        const classeRef = db.collection("classes").doc(classe_id);
         const classeDoc = await classeRef.get();
         if (!classeDoc.exists) {
           return res.status(400).json({
             status: false,
-            message: 'La classe spécifiée n\'existe pas',
+            message: "La classe spécifiée n'existe pas",
           });
         }
       }
@@ -376,38 +482,39 @@ class EtudiantController {
       // Vérifier que la bourse existe si elle est mise à jour
       if (bourse_id !== undefined && bourse_id !== currentData.bourse_id) {
         if (bourse_id) {
-          const bourseRef = db.collection('bourses').doc(bourse_id);
+          const bourseRef = db.collection("bourses").doc(bourse_id);
           const bourseDoc = await bourseRef.get();
           if (!bourseDoc.exists) {
             return res.status(400).json({
               status: false,
-              message: 'La bourse spécifiée n\'existe pas',
+              message: "La bourse spécifiée n'existe pas",
             });
           }
         }
       }
 
       // Vérifier l'unicité si le nom/prénom/date changent
-      if ((nom && nom !== currentData.nom) || 
-          (prenom && prenom !== currentData.prenom) || 
-          (date_naissance && date_naissance !== currentData.date_naissance)) {
-        
+      if (
+        (nom && nom !== currentData.nom) ||
+        (prenom && prenom !== currentData.prenom) ||
+        (date_naissance && date_naissance !== currentData.date_naissance)
+      ) {
         const searchNom = nom || currentData.nom;
         const searchPrenom = prenom || currentData.prenom;
         const searchDate = date_naissance || currentData.date_naissance;
 
         const existingStudent = await this.collection
-          .where('nom', '==', searchNom.trim())
-          .where('prenom', '==', searchPrenom.trim())
-          .where('date_naissance', '==', searchDate)
+          .where("nom", "==", searchNom.trim())
+          .where("prenom", "==", searchPrenom.trim())
+          .where("date_naissance", "==", searchDate)
           .get();
 
         // Vérifier qu'il n'y a pas d'autre étudiant avec ces informations
-        const hasConflict = existingStudent.docs.some(doc => doc.id !== id);
+        const hasConflict = existingStudent.docs.some((doc) => doc.id !== id);
         if (hasConflict) {
           return res.status(409).json({
             status: false,
-            message: 'Un autre étudiant avec ces informations existe déjà',
+            message: "Un autre étudiant avec ces informations existe déjà",
           });
         }
       }
@@ -440,6 +547,12 @@ class EtudiantController {
       if (bourse_id !== undefined) {
         updateData.bourse_id = bourse_id;
       }
+      if (exemptions !== undefined) {
+        updateData.exemptions = encrypt(JSON.stringify(exemptions));
+      }
+      if (parentId !== undefined) {
+        updateData.parentId = encrypt(parentId);
+      }
 
       // Mettre à jour l'étudiant
       await etudiantRef.update(updateData);
@@ -447,19 +560,32 @@ class EtudiantController {
       // Récupérer l'étudiant mis à jour
       const updatedEtudiant = await etudiantRef.get();
 
+      // Audit log
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'UPDATE_ETUDIANT',
+        entityType: 'Etudiant',
+        entityId: id,
+        details: { oldData: oldEtudiantData, newData: updatedEtudiant.data() },
+      });
+      await auditLog.save();
+
+      // Send webhook notification
+      await sendWebhook('student.updated', { studentId: id, oldData: oldEtudiantData, newData: updatedEtudiant.data() });
+
       return res.status(200).json({
         status: true,
-        message: 'Étudiant mis à jour avec succès',
+        message: "Étudiant mis à jour avec succès",
         data: {
           id: updatedEtudiant.id,
           ...updatedEtudiant.data(),
         },
       });
     } catch (error) {
-      console.error('Erreur lors de la mise à jour de l\'étudiant:', error);
+      console.error("Erreur lors de la mise à jour de l'étudiant:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur lors de la mise à jour de l\'étudiant',
+        message: "Erreur lors de la mise à jour de l'étudiant",
         error: error.message,
       });
     }
@@ -476,7 +602,7 @@ class EtudiantController {
       if (!id) {
         return res.status(400).json({
           status: false,
-          message: 'ID de l\'étudiant requis',
+          message: "ID de l'étudiant requis",
         });
       }
 
@@ -487,48 +613,65 @@ class EtudiantController {
       if (!etudiantDoc.exists) {
         return res.status(404).json({
           status: false,
-          message: 'Étudiant non trouvé',
+          message: "Étudiant non trouvé",
         });
       }
 
+      const deletedEtudiantData = etudiantDoc.data(); // Get data before deletion for audit log
+
       // Vérifier si l'étudiant a des factures
-      const facturesRef = db.collection('factures');
+      const facturesRef = db.collection("factures");
       const facturesSnapshot = await facturesRef
-        .where('student_id', '==', id)
+        .where("student_id", "==", id)
         .get();
 
       if (!facturesSnapshot.empty) {
         return res.status(400).json({
           status: false,
-          message: 'Impossible de supprimer cet étudiant car il a des factures associées',
+          message:
+            "Impossible de supprimer cet étudiant car il a des factures associées",
         });
       }
 
       // Vérifier si l'étudiant a des échéanciers
-      const echeanciersRef = db.collection('echeanciers');
+      const echeanciersRef = db.collection("echeanciers");
       const echeanciersSnapshot = await echeanciersRef
-        .where('student_id', '==', id)
+        .where("student_id", "==", id)
         .get();
 
       if (!echeanciersSnapshot.empty) {
         return res.status(400).json({
           status: false,
-          message: 'Impossible de supprimer cet étudiant car il a des échéanciers associés',
+          message:
+            "Impossible de supprimer cet étudiant car il a des échéanciers associés",
         });
       }
 
       // Supprimer l'étudiant
       await etudiantRef.delete();
 
+      // Audit log
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'DELETE_ETUDIANT',
+        entityType: 'Etudiant',
+        entityId: id,
+        details: { deletedEtudiantData },
+      });
+      await auditLog.save();
+
+      // Send webhook notification
+      await sendWebhook('student.deleted', { studentId: id, deletedEtudiantData });
+
       return res.status(200).json({
         status: true,
-        message: 'Étudiant supprimé avec succès',
+        message: "Étudiant supprimé avec succès",
       });
     } catch (error) {
-      console.error('Erreur lors de la suppression de l\'étudiant:', error);
+      console.error("Erreur lors de la suppression de l'étudiant:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur lors de la suppression de l\'étudiant',
+        message: "Erreur lors de la suppression de l'étudiant",
         error: error.message,
       });
     }
@@ -542,10 +685,10 @@ class EtudiantController {
     try {
       const { q, classe_id, nationalite } = req.query;
 
-      if (!q || q.trim() === '') {
+      if (!q || q.trim() === "") {
         return res.status(400).json({
           status: false,
-          message: 'Terme de recherche requis',
+          message: "Terme de recherche requis",
         });
       }
 
@@ -554,31 +697,35 @@ class EtudiantController {
 
       // Recherche par nom ou prénom
       if (searchTerm.length >= 2) {
-        query = query.where('nom', '>=', searchTerm)
-          .where('nom', '<=', searchTerm + '\uf8ff');
+        query = query
+          .where("nom", ">=", searchTerm)
+          .where("nom", "<=", searchTerm + "\uf8ff");
       }
 
       // Filtres additionnels
       if (classe_id) {
-        query = query.where('classe_id', '==', classe_id);
+        query = query.where("classe_id", "==", classe_id);
       }
 
       if (nationalite) {
-        query = query.where('nationalite', '==', nationalite);
+        query = query.where("nationalite", "==", nationalite);
       }
 
       const snapshot = await query.limit(20).get();
 
       const etudiants = [];
-      
+
       // Récupérer les données avec relations
       for (const doc of snapshot.docs) {
         const etudiantData = doc.data();
-        
+
         // Récupérer les informations de la classe
         let classeInfo = null;
         if (etudiantData.classe_id) {
-          const classeDoc = await db.collection('classes').doc(etudiantData.classe_id).get();
+          const classeDoc = await db
+            .collection("classes")
+            .doc(etudiantData.classe_id)
+            .get();
           if (classeDoc.exists) {
             classeInfo = { id: classeDoc.id, ...classeDoc.data() };
           }
@@ -598,10 +745,10 @@ class EtudiantController {
         count: etudiants.length,
       });
     } catch (error) {
-      console.error('Erreur lors de la recherche des étudiants:', error);
+      console.error("Erreur lors de la recherche des étudiants:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur lors de la recherche des étudiants',
+        message: "Erreur lors de la recherche des étudiants",
         error: error.message,
       });
     }
@@ -619,15 +766,15 @@ class EtudiantController {
 
       // Appliquer les filtres si spécifiés
       if (classe_id) {
-        query = query.where('classe_id', '==', classe_id);
+        query = query.where("classe_id", "==", classe_id);
       }
 
       if (nationalite) {
-        query = query.where('nationalite', '==', nationalite);
+        query = query.where("nationalite", "==", nationalite);
       }
 
       const snapshot = await query.get();
-      const etudiants = snapshot.docs.map(doc => doc.data());
+      const etudiants = snapshot.docs.map((doc) => doc.data());
 
       // Calculer les statistiques
       const stats = {
@@ -642,15 +789,17 @@ class EtudiantController {
       let totalAge = 0;
       let validAges = 0;
 
-      etudiants.forEach(etudiant => {
+      etudiants.forEach((etudiant) => {
         // Statistiques par classe
         if (etudiant.classe_id) {
-          stats.parClasse[etudiant.classe_id] = (stats.parClasse[etudiant.classe_id] || 0) + 1;
+          stats.parClasse[etudiant.classe_id] =
+            (stats.parClasse[etudiant.classe_id] || 0) + 1;
         }
 
         // Statistiques par nationalité
         if (etudiant.nationalite) {
-          stats.parNationalite[etudiant.nationalite] = (stats.parNationalite[etudiant.nationalite] || 0) + 1;
+          stats.parNationalite[etudiant.nationalite] =
+            (stats.parNationalite[etudiant.nationalite] || 0) + 1;
         }
 
         // Statistiques des bourses
@@ -680,10 +829,10 @@ class EtudiantController {
         data: stats,
       });
     } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques:', error);
+      console.error("Erreur lors de la récupération des statistiques:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur lors de la récupération des statistiques',
+        message: "Erreur lors de la récupération des statistiques",
         error: error.message,
       });
     }
@@ -703,37 +852,37 @@ class EtudiantController {
       if (!classe_id) {
         return res.status(400).json({
           status: false,
-          message: 'ID de la classe requis',
+          message: "ID de la classe requis",
         });
       }
 
       // Vérifier que la classe existe
-      const classeRef = db.collection('classes').doc(classe_id);
+      const classeRef = db.collection("classes").doc(classe_id);
       const classeDoc = await classeRef.get();
       if (!classeDoc.exists) {
         return res.status(404).json({
           status: false,
-          message: 'Classe non trouvée',
+          message: "Classe non trouvée",
         });
       }
 
       // Récupérer les étudiants de cette classe
       const snapshot = await this.collection
-        .where('classe_id', '==', classe_id)
-        .orderBy('nom')
-        .orderBy('prenom')
+        .where("classe_id", "==", classe_id)
+        .orderBy("nom")
+        .orderBy("prenom")
         .limit(limitNumber)
         .offset((pageNumber - 1) * limitNumber)
         .get();
 
-      const etudiants = snapshot.docs.map(doc => ({
+      const etudiants = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
 
       // Compter le total
       const totalSnapshot = await this.collection
-        .where('classe_id', '==', classe_id)
+        .where("classe_id", "==", classe_id)
         .get();
       const total = totalSnapshot.size;
 
@@ -749,10 +898,13 @@ class EtudiantController {
         },
       });
     } catch (error) {
-      console.error('Erreur lors de la récupération des étudiants par classe:', error);
+      console.error(
+        "Erreur lors de la récupération des étudiants par classe:",
+        error
+      );
       return res.status(500).json({
         status: false,
-        message: 'Erreur lors de la récupération des étudiants par classe',
+        message: "Erreur lors de la récupération des étudiants par classe",
         error: error.message,
       });
     }

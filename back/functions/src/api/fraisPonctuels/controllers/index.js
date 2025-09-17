@@ -1,5 +1,6 @@
 const FraisPonctuel = require('../../../classes/FraisPonctuel');
 const db = require('../../../config/firebase');
+const AuditLog = require('../../../classes/AuditLog');
 
 class FraisPonctuelController {
   constructor() {
@@ -10,15 +11,23 @@ class FraisPonctuelController {
   async create(req, res) {
     console.log("FraisPonctuelController: create method hit");
     try {
-      const { facture_id, description, montant } = req.body;
-      if (!facture_id || !description || montant === undefined) {
+      const { facture_id, student_id, description, montant } = req.body;
+      if (!description || montant === undefined) {
         return res.status(400).json({
           status: false,
-          message: 'Les champs facture_id, description et montant sont requis',
+          message: 'Les champs description et montant sont requis',
         });
       }
+      if (!facture_id && !student_id) {
+        return res.status(400).json({
+          status: false,
+          message: 'Au moins un des champs facture_id ou student_id est requis',
+        });
+      }
+
       const fraisPonctuelData = {
-        facture_id,
+        facture_id: facture_id || null,
+        student_id: student_id || null,
         description: description.trim(),
         montant: Number(montant),
         createdAt: new Date(),
@@ -26,6 +35,17 @@ class FraisPonctuelController {
       };
       const docRef = await this.collection.add(fraisPonctuelData);
       const newFraisPonctuel = await docRef.get();
+
+      // Audit log
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'CREATE_FRAIS_PONCTUEL',
+        entityType: 'FraisPonctuel',
+        entityId: newFraisPonctuel.id,
+        details: { newFraisPonctuelData: newFraisPonctuel.data() },
+      });
+      await auditLog.save();
+
       return res.status(201).json({
         status: true,
         message: 'Frais ponctuel créé avec succès',
@@ -105,7 +125,7 @@ class FraisPonctuelController {
   async update(req, res) {
     try {
       const { id } = req.params;
-      const { facture_id, description, montant } = req.body;
+      const { facture_id, student_id, description, montant } = req.body;
       if (!id) {
         return res
           .status(400)
@@ -118,13 +138,28 @@ class FraisPonctuelController {
           .status(404)
           .json({ status: false, message: 'Frais ponctuel non trouvé' });
       }
+
+      const oldFraisPonctuelData = fraisPonctuelDoc.data(); // Get old data for audit log
+
       const updateData = { updatedAt: new Date() };
       if (facture_id !== undefined) updateData.facture_id = facture_id;
+      if (student_id !== undefined) updateData.student_id = student_id;
       if (description !== undefined)
         updateData.description = description.trim();
       if (montant !== undefined) updateData.montant = Number(montant);
       await fraisPonctuelRef.update(updateData);
       const updatedFraisPonctuel = await fraisPonctuelRef.get();
+
+      // Audit log
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'UPDATE_FRAIS_PONCTUEL',
+        entityType: 'FraisPonctuel',
+        entityId: id,
+        details: { oldData: oldFraisPonctuelData, newData: updatedFraisPonctuel.data() },
+      });
+      await auditLog.save();
+
       return res
         .status(200)
         .json({
@@ -160,7 +195,21 @@ class FraisPonctuelController {
           .status(404)
           .json({ status: false, message: 'Frais ponctuel non trouvé' });
       }
+
+      const deletedFraisPonctuelData = fraisPonctuelDoc.data(); // Get data before deletion for audit log
+
       await fraisPonctuelRef.delete();
+
+      // Audit log
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'DELETE_FRAIS_PONCTUEL',
+        entityType: 'FraisPonctuel',
+        entityId: id,
+        details: { deletedFraisPonctuelData },
+      });
+      await auditLog.save();
+
       return res
         .status(200)
         .json({ status: true, message: 'Frais ponctuel supprimé avec succès' });

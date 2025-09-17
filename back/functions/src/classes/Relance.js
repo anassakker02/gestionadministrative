@@ -2,17 +2,21 @@ class Relance {
   constructor(data) {
     this.id = data.id;
     this.facture_id = data.facture_id;
-    this.date_envoi = data.date_envoi;
+    this.dateEnvoi = data.dateEnvoi; // Renamed from date_envoi
     this.type = data.type; // email, SMS
-    this.statut = data.statut; // envoyée, en attente
+    this.statutEnvoi = data.statutEnvoi || "en attente"; // Renamed from statut
+    this.efficacite = data.efficacite || "pending"; // New field: "pending", "paid_after_reminder", "no_response", "cancelled"
+    this.dateReponse = data.dateReponse || null; // New field for response date
   }
 
   toJSON() {
     return {
       facture_id: this.facture_id,
-      date_envoi: this.date_envoi,
+      dateEnvoi: this.dateEnvoi,
       type: this.type,
-      statut: this.statut
+      statutEnvoi: this.statutEnvoi,
+      efficacite: this.efficacite,
+      dateReponse: this.dateReponse
     };
   }
 }

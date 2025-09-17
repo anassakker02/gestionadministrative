@@ -1,5 +1,6 @@
 const Relance = require('../../../classes/Relance');
 const db = require('../../../config/firebase');
+const AuditLog = require('../../../classes/AuditLog');
 
 class RelanceController {
   constructor() {
@@ -9,26 +10,38 @@ class RelanceController {
   // Créer une relance
   async create(req, res) {
     try {
-      const { facture_id, date_envoi, type, statut } = req.body;
+      const { facture_id, dateEnvoi, type, statutEnvoi, efficacite, dateReponse } = req.body;
 
-      if (!facture_id || !date_envoi || !type) {
+      if (!facture_id || !dateEnvoi || !type) {
         return res.status(400).json({
           status: false,
-          message: 'Les champs facture_id, date_envoi et type sont requis',
+          message: 'Les champs facture_id, dateEnvoi et type sont requis',
         });
       }
 
       const relanceData = {
         facture_id,
-        date_envoi: new Date(date_envoi),
+        dateEnvoi: new Date(dateEnvoi),
         type: type.trim(),
-        statut: statut || 'en attente',
+        statutEnvoi: statutEnvoi || 'en attente',
+        efficacite: efficacite || 'pending',
+        dateReponse: dateReponse ? new Date(dateReponse) : null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
       const docRef = await this.collection.add(relanceData);
       const newRelance = await docRef.get();
+
+      // Audit log
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'CREATE_RELANCE',
+        entityType: 'Relance',
+        entityId: newRelance.id,
+        details: { newRelanceData: newRelance.data() },
+      });
+      await auditLog.save();
 
       return res.status(201).json({
         status: true,
@@ -97,7 +110,7 @@ class RelanceController {
   async update(req, res) {
     try {
       const { id } = req.params;
-      const { facture_id, date_envoi, type, statut } = req.body;
+      const { facture_id, dateEnvoi, type, statutEnvoi, efficacite, dateReponse } = req.body;
 
       if (!id)
         return res
@@ -111,14 +124,28 @@ class RelanceController {
           .status(404)
           .json({ status: false, message: 'Relance non trouvée' });
 
+      const oldRelanceData = relanceDoc.data();
+
       const updateData = { updatedAt: new Date() };
       if (facture_id !== undefined) updateData.facture_id = facture_id;
-      if (date_envoi !== undefined) updateData.date_envoi = new Date(date_envoi);
+      if (dateEnvoi !== undefined) updateData.dateEnvoi = new Date(dateEnvoi);
       if (type !== undefined) updateData.type = type.trim();
-      if (statut !== undefined) updateData.statut = statut;
+      if (statutEnvoi !== undefined) updateData.statutEnvoi = statutEnvoi;
+      if (efficacite !== undefined) updateData.efficacite = efficacite;
+      if (dateReponse !== undefined) updateData.dateReponse = dateReponse ? new Date(dateReponse) : null;
 
       await relanceRef.update(updateData);
       const updatedRelance = await relanceRef.get();
+
+      // Audit log
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'UPDATE_RELANCE',
+        entityType: 'Relance',
+        entityId: id,
+        details: { oldData: oldRelanceData, newData: updatedRelance.data() },
+      });
+      await auditLog.save();
 
       return res.status(200).json({
         status: true,
@@ -132,6 +159,49 @@ class RelanceController {
         message: 'Erreur lors de la mise à jour de la relance',
         error: error.message,
       });
+    }
+  }
+
+  async updateRelanceEffectiveness(req, res) {
+    try {
+      const { id } = req.params;
+      const { efficacite, dateReponse } = req.body;
+
+      if (!id || !efficacite) {
+        return res.status(400).json({ status: false, message: "Reminder ID and effectiveness status are required." });
+      }
+
+      const relanceRef = this.collection.doc(id);
+      const relanceDoc = await relanceRef.get();
+
+      if (!relanceDoc.exists) {
+        return res.status(404).json({ status: false, message: "Relance non trouvée." });
+      }
+
+      const oldRelanceData = relanceDoc.data();
+
+      await relanceRef.update({
+        efficacite,
+        dateReponse: dateReponse ? new Date(dateReponse) : new Date(), // Set to now if not provided
+        updatedAt: new Date(),
+      });
+
+      const updatedRelance = await relanceRef.get();
+
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'UPDATE_RELANCE_EFFECTIVENESS',
+        entityType: 'Relance',
+        entityId: id,
+        details: { oldData: oldRelanceData, newData: updatedRelance.data() },
+      });
+      await auditLog.save();
+
+      return res.status(200).json({ status: true, message: "Efficacité de la relance mise à jour.", data: { id: updatedRelance.id, ...updatedRelance.data() } });
+
+    } catch (error) {
+      console.error("Error updating reminder effectiveness:", error);
+      return res.status(500).json({ status: false, message: "Erreur lors de la mise à jour de l'efficacité de la relance." });
     }
   }
 
@@ -151,7 +221,20 @@ class RelanceController {
           .status(404)
           .json({ status: false, message: 'Relance non trouvée' });
 
+      const deletedRelanceData = relanceDoc.data(); // For audit log
+
       await relanceRef.delete();
+
+      // Audit log
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'DELETE_RELANCE',
+        entityType: 'Relance',
+        entityId: id,
+        details: { deletedRelanceData },
+      });
+      await auditLog.save();
+
       return res
         .status(200)
         .json({ status: true, message: 'Relance supprimée avec succès' });

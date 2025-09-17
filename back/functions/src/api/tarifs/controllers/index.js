@@ -1,9 +1,10 @@
-const Tarif = require('../../../classes/Tarif');
-const db = require('../../../config/firebase');
+const Tarif = require("../../../classes/Tarif");
+const db = require("../../../config/firebase");
+const AuditLog = require("../../../classes/AuditLog");
 
 class TarifController {
   constructor() {
-    this.collection = db.collection('tarifs');
+    this.collection = db.collection("tarifs");
   }
 
   /**
@@ -12,38 +13,73 @@ class TarifController {
    */
   async create(req, res) {
     try {
-      const { nom, montant } = req.body;
+      const { classe_id, montant, annee_scolaire, nationalite, bourse_id, reductions, type } = req.body;
 
-      // Validation des données
-      if (!nom || montant === undefined) {
+      // Validation des données obligatoires
+      if (!classe_id || montant === undefined || !annee_scolaire || !nationalite || !type) {
         return res.status(400).json({
           status: false,
-          message: 'Le nom et le montant sont requis',
+          message: "Classe, montant, année scolaire, nationalité et type sont requis",
         });
       }
 
-      if (typeof montant !== 'number' || montant < 0) {
+      if (typeof montant !== "number" || montant < 0) {
         return res.status(400).json({
           status: false,
-          message: 'Le montant doit être un nombre positif',
+          message: "Le montant doit être un nombre positif",
         });
       }
 
-      // Vérifier si un tarif avec le même nom existe déjà
-      const existingTarif = await this.collection
-        .where('nom', '==', nom.trim())
-        .get();
-      if (!existingTarif.empty) {
-        return res.status(409).json({
-          status: false,
-          message: 'Un tarif avec ce nom existe déjà',
-        });
+      // Check if an active tariff with the same criteria exists
+      let existingTarifQuery = this.collection
+        .where("classe_id", "==", classe_id)
+        .where("annee_scolaire", "==", annee_scolaire)
+        .where("nationalite", "==", nationalite)
+        .where("type", "==", type)
+        .where("isActive", "==", true);
+
+      if (bourse_id) {
+        existingTarifQuery = existingTarifQuery.where("bourse_id", "==", bourse_id);
+      } else {
+        existingTarifQuery = existingTarifQuery.where("bourse_id", "==", null);
       }
 
-      // Créer le nouveau tarif
+      const existingTarifSnapshot = await existingTarifQuery.get();
+
+      if (!existingTarifSnapshot.empty) {
+        // Deactivate the old tariff
+        const oldTarifDoc = existingTarifSnapshot.docs[0];
+        const oldTarifRef = this.collection.doc(oldTarifDoc.id);
+        const oldTarifData = oldTarifDoc.data();
+
+        await oldTarifRef.update({
+          isActive: false,
+          endDate: new Date(),
+          updatedAt: new Date(),
+        });
+
+        // Audit log for old tariff deactivation
+        const deactivateAuditLog = new AuditLog({
+          userId: req.user?.id || 'system',
+          action: 'DEACTIVATE_TARIF',
+          entityType: 'Tarif',
+          entityId: oldTarifDoc.id,
+          details: { oldData: oldTarifData, newData: { ...oldTarifData, isActive: false, endDate: new Date() } },
+        });
+        await deactivateAuditLog.save();
+      }
+
+      // Create the new tariff
       const tarifData = {
-        nom: nom.trim(),
+        classe_id,
         montant: Number(montant),
+        annee_scolaire,
+        nationalite,
+        bourse_id: bourse_id || null,
+        reductions: Array.isArray(reductions) ? reductions : [],
+        type,
+        isActive: true,
+        endDate: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -51,19 +87,29 @@ class TarifController {
       const docRef = await this.collection.add(tarifData);
       const newTarif = await docRef.get();
 
+      // Audit log for new tariff creation
+      const createAuditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'CREATE_TARIF',
+        entityType: 'Tarif',
+        entityId: newTarif.id,
+        details: { newTarifData: newTarif.data() },
+      });
+      await createAuditLog.save();
+
       return res.status(201).json({
         status: true,
-        message: 'Tarif créé avec succès',
+        message: "Tarif créé avec succès",
         data: {
           id: newTarif.id,
           ...newTarif.data(),
         },
       });
     } catch (error) {
-      console.error('Erreur lors de la création du tarif:', error);
+      console.error("Erreur lors de la création du tarif:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur interne du serveur',
+        message: "Erreur interne du serveur",
         error: error.message,
       });
     }
@@ -79,13 +125,15 @@ class TarifController {
       const pageNumber = parseInt(page);
       const limitNumber = parseInt(limit);
 
-      let query = this.collection.orderBy('createdAt', 'desc');
+      let query = this.collection.where("isActive", "==", true).orderBy("createdAt", "desc"); // Only get active tariffs by default
 
       // Recherche par nom si le paramètre search est fourni
       if (search && search.trim()) {
+        // This search will need to be refined if 'nom' is no longer a unique identifier.
+        // For now, keeping it as is, but noting it for future improvements.
         query = query
-          .where('nom', '>=', search.trim())
-          .where('nom', '<=', search.trim() + '\uf8ff');
+          .where("nom", ">=", search.trim())
+          .where("nom", "<=", search.trim() + "\uf8ff");
       }
 
       // Pagination
@@ -98,7 +146,7 @@ class TarifController {
       }));
 
       // Compter le total des documents pour la pagination
-      const totalSnapshot = await this.collection.get();
+      const totalSnapshot = await this.collection.where("isActive", "==", true).get();
       const total = totalSnapshot.size;
 
       return res.status(200).json({
@@ -112,10 +160,10 @@ class TarifController {
         },
       });
     } catch (error) {
-      console.error('Erreur lors de la récupération des tarifs:', error);
+      console.error("Erreur lors de la récupération des tarifs:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur lors de la récupération des tarifs',
+        message: "Erreur lors de la récupération des tarifs",
         error: error.message,
       });
     }
@@ -132,7 +180,7 @@ class TarifController {
       if (!id) {
         return res.status(400).json({
           status: false,
-          message: 'ID du tarif requis',
+          message: "ID du tarif requis",
         });
       }
 
@@ -141,7 +189,7 @@ class TarifController {
       if (!tarifDoc.exists) {
         return res.status(404).json({
           status: false,
-          message: 'Tarif non trouvé',
+          message: "Tarif non trouvé",
         });
       }
 
@@ -156,10 +204,10 @@ class TarifController {
         data: tarif.toJSON(),
       });
     } catch (error) {
-      console.error('Erreur lors de la récupération du tarif:', error);
+      console.error("Erreur lors de la récupération du tarif:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur lors de la récupération du tarif',
+        message: "Erreur lors de la récupération du tarif",
         error: error.message,
       });
     }
@@ -172,90 +220,86 @@ class TarifController {
   async update(req, res) {
     try {
       const { id } = req.params;
-      const { nom, montant } = req.body;
+      const { classe_id, montant, annee_scolaire, nationalite, bourse_id, reductions, type } = req.body;
 
       if (!id) {
         return res.status(400).json({
           status: false,
-          message: 'ID du tarif requis',
+          message: "ID du tarif requis",
         });
       }
 
-      // Vérifier si le tarif existe
+      // Vérifier si le tarif existe et est actif
       const tarifRef = this.collection.doc(id);
       const tarifDoc = await tarifRef.get();
 
-      if (!tarifDoc.exists) {
+      if (!tarifDoc.exists || !tarifDoc.data().isActive) {
         return res.status(404).json({
           status: false,
-          message: 'Tarif non trouvé',
+          message: "Tarif non trouvé ou inactif",
         });
       }
 
-      // Validation des données
-      if (nom !== undefined && (!nom || nom.trim() === '')) {
-        return res.status(400).json({
-          status: false,
-          message: 'Le nom ne peut pas être vide',
-        });
-      }
+      const oldTarifData = tarifDoc.data();
 
-      if (
-        montant !== undefined &&
-        (typeof montant !== 'number' || montant < 0)
-      ) {
-        return res.status(400).json({
-          status: false,
-          message: 'Le montant doit être un nombre positif',
-        });
-      }
+      // Deactivate the old tariff (soft delete)
+      await tarifRef.update({
+        isActive: false,
+        endDate: new Date(),
+        updatedAt: new Date(),
+      });
 
-      // Vérifier si le nouveau nom n'existe pas déjà (sauf pour le tarif actuel)
-      if (nom && nom.trim() !== tarifDoc.data().nom) {
-        const existingTarif = await this.collection
-          .where('nom', '==', nom.trim())
-          .get();
+      // Audit log for old tariff deactivation
+      const deactivateAuditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'DEACTIVATE_OLD_TARIF_ON_UPDATE',
+        entityType: 'Tarif',
+        entityId: id,
+        details: { oldData: oldTarifData, newData: { ...oldTarifData, isActive: false, endDate: new Date() } },
+      });
+      await deactivateAuditLog.save();
 
-        if (!existingTarif.empty) {
-          return res.status(409).json({
-            status: false,
-            message: 'Un tarif avec ce nom existe déjà',
-          });
-        }
-      }
-
-      // Préparer les données de mise à jour
-      const updateData = {
+      // Create a new tariff with updated details
+      const newTarifData = {
+        classe_id: classe_id !== undefined ? classe_id : oldTarifData.classe_id,
+        montant: montant !== undefined ? Number(montant) : oldTarifData.montant,
+        annee_scolaire: annee_scolaire !== undefined ? annee_scolaire : oldTarifData.annee_scolaire,
+        nationalite: nationalite !== undefined ? nationalite : oldTarifData.nationalite,
+        bourse_id: bourse_id !== undefined ? (bourse_id || null) : (oldTarifData.bourse_id || null),
+        reductions: reductions !== undefined ? (Array.isArray(reductions) ? reductions : []) : oldTarifData.reductions,
+        type: type !== undefined ? type : oldTarifData.type,
+        isActive: true,
+        endDate: null,
+        createdAt: new Date(), // New creation date for the new tariff
         updatedAt: new Date(),
       };
 
-      if (nom !== undefined) {
-        updateData.nom = nom.trim();
-      }
+      const docRef = await this.collection.add(newTarifData);
+      const updatedTarif = await docRef.get();
 
-      if (montant !== undefined) {
-        updateData.montant = Number(montant);
-      }
-
-      // Mettre à jour le tarif
-      await tarifRef.update(updateData);
-
-      // Récupérer le tarif mis à jour
-      const updatedTarif = await tarifRef.get();
+      // Audit log for new tariff creation
+      const createNewAuditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'CREATE_NEW_TARIF_ON_UPDATE',
+        entityType: 'Tarif',
+        entityId: updatedTarif.id,
+        details: { newTarifData: updatedTarif.data() },
+      });
+      await createNewAuditLog.save();
 
       return res.status(200).json({
         status: true,
-        message: 'Tarif mis à jour avec succès',
+        message: "Tarif mis à jour avec succès (nouvelle version créée)",
         data: {
           id: updatedTarif.id,
           ...updatedTarif.data(),
         },
       });
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du tarif:', error);
+      console.error("Erreur lors de la mise à jour du tarif:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur lors de la mise à jour du tarif',
+        message: "Erreur lors de la mise à jour du tarif",
         error: error.message,
       });
     }
@@ -272,47 +316,49 @@ class TarifController {
       if (!id) {
         return res.status(400).json({
           status: false,
-          message: 'ID du tarif requis',
+          message: "ID du tarif requis",
         });
       }
 
-      // Vérifier si le tarif existe
+      // Vérifier si le tarif existe et est actif
       const tarifRef = this.collection.doc(id);
       const tarifDoc = await tarifRef.get();
 
-      if (!tarifDoc.exists) {
+      if (!tarifDoc.exists || !tarifDoc.data().isActive) {
         return res.status(404).json({
           status: false,
-          message: 'Tarif non trouvé',
+          message: "Tarif non trouvé ou déjà inactif",
         });
       }
 
-      // Vérifier si le tarif est utilisé par des factures
-      const facturesRef = db.collection('factures');
-      const facturesSnapshot = await facturesRef
-        .where('tarif_id', '==', id)
-        .get();
+      const deletedTarifData = tarifDoc.data(); // Get data before soft deletion
 
-      if (!facturesSnapshot.empty) {
-        return res.status(400).json({
-          status: false,
-          message:
-            'Impossible de supprimer ce tarif car il est utilisé dans des factures',
-        });
-      }
+      // Perform soft delete
+      await tarifRef.update({
+        isActive: false,
+        endDate: new Date(),
+        updatedAt: new Date(),
+      });
 
-      // Supprimer le tarif
-      await tarifRef.delete();
+      // Audit log for soft deletion
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'SOFT_DELETE_TARIF',
+        entityType: 'Tarif',
+        entityId: id,
+        details: { oldData: deletedTarifData, newData: { ...deletedTarifData, isActive: false, endDate: new Date() } },
+      });
+      await auditLog.save();
 
       return res.status(200).json({
         status: true,
-        message: 'Tarif supprimé avec succès',
+        message: "Tarif supprimé (désactivé) avec succès",
       });
     } catch (error) {
-      console.error('Erreur lors de la suppression du tarif:', error);
+      console.error("Erreur lors de la suppression du tarif:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur lors de la suppression du tarif',
+        message: "Erreur lors de la suppression du tarif",
         error: error.message,
       });
     }
@@ -326,18 +372,19 @@ class TarifController {
     try {
       const { q } = req.query;
 
-      if (!q || q.trim() === '') {
+      if (!q || q.trim() === "") {
         return res.status(400).json({
           status: false,
-          message: 'Terme de recherche requis',
+          message: "Terme de recherche requis",
         });
       }
 
       const searchTerm = q.trim();
       const snapshot = await this.collection
-        .where('nom', '>=', searchTerm)
-        .where('nom', '<=', searchTerm + '\uf8ff')
-        .orderBy('nom')
+        .where("isActive", "==", true) // Search only active tariffs
+        .where("nationalite", ">=", searchTerm)
+        .where("nationalite", "<=", searchTerm + "\uf8ff")
+        .orderBy("nationalite") // Order by the field being searched for efficient queries
         .limit(20)
         .get();
 
@@ -353,10 +400,10 @@ class TarifController {
         count: tarifs.length,
       });
     } catch (error) {
-      console.error('Erreur lors de la recherche des tarifs:', error);
+      console.error("Erreur lors de la recherche des tarifs:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur lors de la recherche des tarifs',
+        message: "Erreur lors de la recherche des tarifs",
         error: error.message,
       });
     }
@@ -368,7 +415,7 @@ class TarifController {
    */
   async getStats(req, res) {
     try {
-      const snapshot = await this.collection.get();
+      const snapshot = await this.collection.where("isActive", "==", true).get(); // Stats only for active tariffs
       const tarifs = snapshot.docs.map((doc) => doc.data());
 
       const stats = {
@@ -377,9 +424,9 @@ class TarifController {
         moyenneMontant:
           tarifs.length > 0
             ? (
-              tarifs.reduce((sum, tarif) => sum + tarif.montant, 0) /
+                tarifs.reduce((sum, tarif) => sum + tarif.montant, 0) /
                 tarifs.length
-            ).toFixed(2)
+              ).toFixed(2)
             : 0,
         tarifMaxMontant:
           tarifs.length > 0 ? Math.max(...tarifs.map((t) => t.montant)) : 0,
@@ -392,10 +439,10 @@ class TarifController {
         data: stats,
       });
     } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques:', error);
+      console.error("Erreur lors de la récupération des statistiques:", error);
       return res.status(500).json({
         status: false,
-        message: 'Erreur lors de la récupération des statistiques',
+        message: "Erreur lors de la récupération des statistiques",
         error: error.message,
       });
     }
