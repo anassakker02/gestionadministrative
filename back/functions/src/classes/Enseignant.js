@@ -1,4 +1,4 @@
-class Parent {
+class Enseignant {
   constructor(data) {
     this.id = data.id;
     this.user_id = data.user_id; // Référence vers l'utilisateur dans la table users
@@ -7,15 +7,20 @@ class Parent {
     this.email = data.email;
     this.telephone = data.telephone;
     this.adresse = data.adresse;
-    this.profession = data.profession || null;
-    this.enfants_ids = data.enfants_ids || []; // IDs des étudiants enfants
+    this.specialite = data.specialite || null;
+    this.diplomes = data.diplomes || [];
+    this.classes_assignees = data.classes_assignees || []; // IDs des classes
+    this.matieres = data.matieres || []; // IDs des matières enseignées
+    this.numero_enseignant = data.numero_enseignant || null;
+    this.date_embauche = data.date_embauche || null;
+    this.statut = data.statut || "actif"; // actif, inactif, congé
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || new Date();
   }
 
-  // Créer un parent à partir des données d'un utilisateur
+  // Créer un enseignant à partir des données d'un utilisateur
   static fromUser(user, additionalData = {}) {
-    return new Parent({
+    return new Enseignant({
       user_id: user.id,
       nom: user.nom,
       prenom: user.prenom,
@@ -34,12 +39,17 @@ class Parent {
       email: this.email,
       telephone: this.telephone,
       adresse: this.adresse,
-      profession: this.profession,
-      enfants_ids: this.enfants_ids,
+      specialite: this.specialite,
+      diplomes: this.diplomes,
+      classes_assignees: this.classes_assignees,
+      matieres: this.matieres,
+      numero_enseignant: this.numero_enseignant,
+      date_embauche: this.date_embauche,
+      statut: this.statut,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };
   }
 }
 
-module.exports = Parent;
+module.exports = Enseignant;

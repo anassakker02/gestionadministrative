@@ -4,6 +4,7 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const express = require("express");
+const { authenticate, authorize } = require("../middlewares/auth");
 
 const boursesHandler = require("./bourses/routes");
 const classesHandler = require("./classes/routes");
@@ -29,23 +30,24 @@ app.use(cors({ origin: ["http://localhost:8080", "http://127.0.0.1:8080"], crede
 app.use(cookieParser());
 app.use(bodyParser.json());
 
-app.use("/bourses", boursesHandler);
-app.use("/classes", classesHandler);
-app.use("/echeanciers", echeanciersHandler);
-app.use("/etudiants", etudiantsHandler);
-app.use("/factures", facturesHandler);
-app.use("/fraisPonctuels", fraisPonctuelsHandler);
-app.use("/paiements", paiementsHandler);
-app.use("/activites", activitesHandler);
-app.use("/relances", relancesHandler);
-app.use("/tarifs", tarifsHandler);
-app.use("/users", usersHandler);
+app.use("/bourses", authenticate, authorize(["admin"]), boursesHandler);
+app.use("/classes", authenticate, authorize(["admin"]), classesHandler);
+app.use("/echeanciers", authenticate, authorize(["admin"]), echeanciersHandler);
+app.use("/etudiants", authenticate, authorize(["admin", "sous-admin"]), etudiantsHandler);
+app.use("/factures", authenticate, authorize(["admin", "comptable", "etudiant", "parent"]), facturesHandler);
+app.use("/fraisPonctuels", authenticate, authorize(["admin"]), fraisPonctuelsHandler);
+app.use("/paiements", authenticate, authorize(["admin", "comptable", "etudiant", "parent"]), paiementsHandler);
+app.use("/activites", authenticate, authorize(["admin"]), activitesHandler);
+app.use("/relances", authenticate, authorize(["admin"]), relancesHandler);
+app.use("/tarifs", authenticate, authorize(["admin", "comptable"]), tarifsHandler);
+app.use("/users", authenticate, authorize(["admin"]), usersHandler);
+
 app.use("/auth", authHandler);
-app.use("/dashboard", dashboardHandler);
-app.use("/parents", parentsHandler);
-app.use("/upload", uploadHandler);
-app.use("/webhooks", webhooksHandler);
-app.use("/backup", backupHandler);
+app.use("/dashboard", authenticate, authorize(["admin"]), dashboardHandler);
+app.use("/parents", authenticate, authorize(["admin", "sous-admin"]), parentsHandler);
+app.use("/upload", authenticate, authorize(["admin"]), uploadHandler);
+app.use("/webhooks", authenticate, authorize(["admin"]), webhooksHandler);
+app.use("/backup", authenticate, authorize(["admin"]), backupHandler);
 
 // Serve Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));

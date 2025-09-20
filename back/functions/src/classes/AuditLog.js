@@ -10,6 +10,22 @@ class AuditLog {
     this.details = data.details || {}; // Additional details about the action
   }
 
+  // Nettoyer les valeurs undefined
+  static cleanUndefinedValues(obj) {
+    if (Array.isArray(obj)) {
+      return obj.map((item) => AuditLog.cleanUndefinedValues(item));
+    } else if (obj && typeof obj === "object") {
+      const cleaned = {};
+      for (const [key, value] of Object.entries(obj)) {
+        if (value !== undefined) {
+          cleaned[key] = AuditLog.cleanUndefinedValues(value);
+        }
+      }
+      return cleaned;
+    }
+    return obj;
+  }
+
   async save() {
     try {
       const logData = {
@@ -18,9 +34,11 @@ class AuditLog {
         entityType: this.entityType,
         entityId: this.entityId,
         timestamp: this.timestamp,
-        details: this.details,
+        details: AuditLog.cleanUndefinedValues(this.details),
       };
-      await db.collection("auditLogs").add(logData);
+      await db
+        .collection("auditLogs")
+        .add(AuditLog.cleanUndefinedValues(logData));
     } catch (error) {
       console.error("Error saving audit log:", error);
       throw new Error("Failed to save audit log");

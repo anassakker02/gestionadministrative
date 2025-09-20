@@ -1,6 +1,5 @@
-const router = require('express').Router(); // Module pour créer un nouveau route
-const usersController = require('../controllers');
-
+const router = require("express").Router(); // Module pour créer un nouveau route
+const usersController = require("../controllers");
 
 /**
  * @swagger
@@ -215,8 +214,12 @@ const usersController = require('../controllers');
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/', usersController.getAll.bind(usersController));
-router.post('/', usersController.create.bind(usersController));
+router.get("/", usersController.getAll.bind(usersController));
+router.post("/", usersController.create.bind(usersController));
+router.get(
+  "/available-for-student",
+  usersController.getAvailableUsersForStudent.bind(usersController)
+);
 
 /**
  * @swagger
@@ -345,9 +348,9 @@ router.post('/', usersController.create.bind(usersController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:id', usersController.getById.bind(usersController));
-router.put('/:id', usersController.update.bind(usersController));
-router.delete('/:id', usersController.delete.bind(usersController));
+router.get("/:id", usersController.getById.bind(usersController));
+router.put("/:id", usersController.update.bind(usersController));
+router.delete("/:id", usersController.delete.bind(usersController));
 
 /**
  * @swagger
@@ -384,7 +387,10 @@ router.delete('/:id', usersController.delete.bind(usersController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.patch('/:id/activate', usersController.activateUser.bind(usersController));
+router.patch(
+  "/:id/activate",
+  usersController.activateUser.bind(usersController)
+);
 
 /**
  * @swagger
@@ -421,7 +427,10 @@ router.patch('/:id/activate', usersController.activateUser.bind(usersController)
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.patch('/:id/deactivate', usersController.deactivateUser.bind(usersController));
+router.patch(
+  "/:id/deactivate",
+  usersController.deactivateUser.bind(usersController)
+);
 
 /**
  * @swagger
@@ -470,7 +479,50 @@ router.patch('/:id/deactivate', usersController.deactivateUser.bind(usersControl
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.patch('/:id/preferences', usersController.updateNotificationPreferences.bind(usersController));
+router.patch(
+  "/:id/preferences",
+  usersController.updateNotificationPreferences.bind(usersController)
+);
 
+/**
+ * @swagger
+ * /users/pending:
+ *   get:
+ *     summary: Get users pending role assignment
+ *     tags: [Users]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of users pending role assignment
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Users pending role assignment"
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/User'
+ *       403:
+ *         description: Not authorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get("/pending", usersController.getPendingUsers.bind(usersController));
 
 module.exports = router;

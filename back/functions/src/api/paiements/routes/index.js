@@ -205,8 +205,8 @@
  *   description: Payment management operations
  */
 
-const router = require('express').Router();
-const paiementController = require('../controllers');
+const router = require("express").Router();
+const paiementController = require("../controllers");
 
 /**
  * @swagger
@@ -261,7 +261,12 @@ const paiementController = require('../controllers');
  *         name: student_id
  *         schema:
  *           type: string
- *         description: Optional student ID to filter payments by
+ *         description: Optional student ID to filter payments by (alias of etudiant_id)
+ *       - in: query
+ *         name: etudiant_id
+ *         schema:
+ *           type: string
+ *         description: Optional student ID to filter payments by (canonical in database)
  *       - in: query
  *         name: facture_id
  *         schema:
@@ -319,8 +324,8 @@ const paiementController = require('../controllers');
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/', paiementController.create.bind(paiementController));
-router.get('/', paiementController.getAll.bind(paiementController));
+router.post("/", paiementController.create.bind(paiementController));
+router.get("/", paiementController.getAll.bind(paiementController));
 
 /**
  * @swagger
@@ -449,9 +454,9 @@ router.get('/', paiementController.getAll.bind(paiementController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:id', paiementController.getById.bind(paiementController));
-router.put('/:id', paiementController.update.bind(paiementController));
-router.delete('/:id', paiementController.delete.bind(paiementController));
+router.get("/:id", paiementController.getById.bind(paiementController));
+router.put("/:id", paiementController.update.bind(paiementController));
+router.delete("/:id", paiementController.delete.bind(paiementController));
 
 /**
  * @swagger
@@ -544,8 +549,14 @@ router.delete('/:id', paiementController.delete.bind(paiementController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.patch('/:id/dispute/initiate', paiementController.initiateDispute.bind(paiementController));
-router.patch('/:id/dispute/resolve', paiementController.resolveDispute.bind(paiementController));
+router.patch(
+  "/:id/dispute/initiate",
+  paiementController.initiateDispute.bind(paiementController)
+);
+router.patch(
+  "/:id/dispute/resolve",
+  paiementController.resolveDispute.bind(paiementController)
+);
 
 /**
  * @swagger
@@ -638,7 +649,13 @@ router.patch('/:id/dispute/resolve', paiementController.resolveDispute.bind(paie
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.patch('/:id/refund/initiate', paiementController.initiateRefund.bind(paiementController));
-router.patch('/:id/refund/complete', paiementController.completeRefund.bind(paiementController));
+router.patch(
+  "/:id/refund/initiate",
+  paiementController.initiateRefund.bind(paiementController)
+);
+router.patch(
+  "/:id/refund/complete",
+  paiementController.completeRefund.bind(paiementController)
+);
 
 module.exports = router;

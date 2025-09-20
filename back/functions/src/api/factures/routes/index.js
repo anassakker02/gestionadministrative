@@ -298,8 +298,8 @@
  */
 
 const router = require("express").Router();
-const FactureController = require('../controllers');
-const { authenticate, authorize } = require('../../../middlewares/auth');
+const FactureController = require("../controllers");
+const { authenticate, authorize } = require("../../../middlewares/auth");
 
 /**
  * @swagger
@@ -395,8 +395,14 @@ const { authenticate, authorize } = require('../../../middlewares/auth');
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/', FactureController.create.bind(FactureController));
-router.get('/', FactureController.getAll.bind(FactureController));
+router.post("/", FactureController.create.bind(FactureController));
+// Générer une facture automatiquement pour un étudiant (utilise tarifs si fournis)
+router.post(
+  "/generate-for-student",
+  // authentification/autorisation optionnelle selon besoins
+  FactureController.generateForStudent.bind(FactureController)
+);
+router.get("/", FactureController.getAll.bind(FactureController));
 
 /**
  * @swagger
@@ -525,9 +531,9 @@ router.get('/', FactureController.getAll.bind(FactureController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:id', FactureController.getById.bind(FactureController));
-router.put('/:id', FactureController.update.bind(FactureController));
-router.delete('/:id', FactureController.delete.bind(FactureController));
+router.get("/:id", FactureController.getById.bind(FactureController));
+router.put("/:id", FactureController.update.bind(FactureController));
+router.delete("/:id", FactureController.delete.bind(FactureController));
 
 /**
  * @swagger
@@ -575,7 +581,10 @@ router.delete('/:id', FactureController.delete.bind(FactureController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/student/:student_id', FactureController.getByStudent.bind(FactureController));
+router.get(
+  "/student/:student_id",
+  FactureController.getByStudent.bind(FactureController)
+);
 
 /**
  * @swagger
@@ -624,7 +633,10 @@ router.get('/student/:student_id', FactureController.getByStudent.bind(FactureCo
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.patch('/:id/cancel', FactureController.cancelFacture.bind(FactureController));
+router.patch(
+  "/:id/cancel",
+  FactureController.cancelFacture.bind(FactureController)
+);
 
 /**
  * @swagger
@@ -660,7 +672,7 @@ router.patch('/:id/cancel', FactureController.cancelFacture.bind(FactureControll
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/avoir', FactureController.createAvoir.bind(FactureController));
+router.post("/avoir", FactureController.createAvoir.bind(FactureController));
 
 /**
  * @swagger
@@ -702,7 +714,10 @@ router.post('/avoir', FactureController.createAvoir.bind(FactureController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/rectificative', FactureController.createRectificativeFacture.bind(FactureController));
+router.post(
+  "/rectificative",
+  FactureController.createRectificativeFacture.bind(FactureController)
+);
 
 /**
  * @swagger
@@ -744,7 +759,12 @@ router.post('/rectificative', FactureController.createRectificativeFacture.bind(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/family-invoice', authenticate, authorize(['admin', 'comptable']), FactureController.createFamilyInvoice.bind(FactureController));
+router.post(
+  "/family-invoice",
+  authenticate,
+  authorize(["admin", "comptable"]),
+  FactureController.createFamilyInvoice.bind(FactureController)
+);
 
 /**
  * @swagger
@@ -778,6 +798,139 @@ router.post('/family-invoice', authenticate, authorize(['admin', 'comptable']), 
  *       500:
  *         $ref: '#/components/responses/ErrorResponse'
  */
-router.get('/:id/pdf', authenticate, authorize(['admin', 'comptable', 'etudiant', 'family']), FactureController.generatePdfInvoice.bind(FactureController));
+router.get(
+  "/:id/pdf",
+  authenticate,
+  authorize(["admin", "comptable", "etudiant", "family"]),
+  FactureController.generatePdfInvoice.bind(FactureController)
+);
+
+/**
+ * @swagger
+ * /api/v1/factures/generate-after-payment:
+ *   post:
+ *     summary: Generate invoice automatically after payment
+ *     tags: [Factures]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               student_id:
+ *                 type: string
+ *                 description: ID of the student
+ *               parent_id:
+ *                 type: string
+ *                 description: ID of the parent (optional)
+ *               montant_paye:
+ *                 type: number
+ *                 description: Amount paid
+ *               mode_paiement:
+ *                 type: string
+ *                 enum: [PayPal, Espèces, Virement, Carte bancaire]
+ *                 description: Payment method
+ *               payment_id:
+ *                 type: string
+ *                 description: Payment ID or reference
+ *               qui_a_paye:
+ *                 type: string
+ *                 description: Name of the person who paid
+ *               enregistre_par:
+ *                 type: string
+ *                 description: ID of the user who recorded the payment
+ *               reference_externe:
+ *                 type: string
+ *                 description: External reference (e.g., PayPal transaction ID)
+ *               tarif_items:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     description:
+ *                       type: string
+ *                     quantity:
+ *                       type: number
+ *                     unitPrice:
+ *                       type: number
+ *                     total:
+ *                       type: number
+ *             required:
+ *               - student_id
+ *               - montant_paye
+ *               - mode_paiement
+ *               - qui_a_paye
+ *               - enregistre_par
+ *     responses:
+ *       201:
+ *         description: Invoice generated successfully after payment
+ *       400:
+ *         description: Missing required fields
+ *       404:
+ *         description: Student not found
+ */
+router.post(
+  "/generate-after-payment",
+  authenticate,
+  authorize(["admin", "sous-admin", "comptable"]),
+  FactureController.generateAfterPayment.bind(FactureController)
+);
+
+/**
+ * @swagger
+ * /api/v1/factures/record-manual-payment:
+ *   post:
+ *     summary: Record manual payment for an existing invoice
+ *     tags: [Factures]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               facture_id:
+ *                 type: string
+ *                 description: ID of the invoice
+ *               montant_paye:
+ *                 type: number
+ *                 description: Amount paid
+ *               qui_a_paye:
+ *                 type: string
+ *                 description: Name of the person who paid
+ *               mode_paiement:
+ *                 type: string
+ *                 enum: [PayPal, Espèces, Virement, Carte bancaire]
+ *                 description: Payment method
+ *               reference_externe:
+ *                 type: string
+ *                 description: External reference
+ *               commentaires:
+ *                 type: string
+ *                 description: Additional comments
+ *             required:
+ *               - facture_id
+ *               - montant_paye
+ *               - qui_a_paye
+ *               - mode_paiement
+ *     responses:
+ *       200:
+ *         description: Manual payment recorded successfully
+ *       400:
+ *         description: Missing required fields
+ *       404:
+ *         description: Invoice not found
+ */
+router.post(
+  "/record-manual-payment",
+  authenticate,
+  authorize(["admin", "sous-admin", "comptable"]),
+  FactureController.recordManualPayment.bind(FactureController)
+);
 
 module.exports = router;

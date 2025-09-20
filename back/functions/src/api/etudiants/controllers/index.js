@@ -1,12 +1,18 @@
 const Etudiant = require("../../../classes/Etudiant");
 const db = require("../../../config/firebase");
 const AuditLog = require("../../../classes/AuditLog");
-const { sendWebhook } = require('../../../utils/webhookSender');
-const { encrypt, decrypt } = require('../../../utils/encryption');
+const { sendWebhook } = require("../../../utils/webhookSender");
+const { encrypt, decrypt } = require("../../../utils/encryption");
 
 class EtudiantController {
   constructor() {
     this.collection = db.collection("etudiants");
+    this.tarifsCollection = db.collection("tarifs");
+    this.boursesCollection = db.collection("bourses");
+    this.factureCollection = db.collection("factures");
+    this.paiementCollection = db.collection("paiements");
+    this.userCollection = db.collection("users");
+    this.classesCollection = db.collection("classes");
   }
 
   /**
@@ -15,8 +21,16 @@ class EtudiantController {
    */
   async create(req, res) {
     try {
-      const { nom, prenom, date_naissance, classe_id, nationalite, bourse_id, exemptions, parentId } =
-        req.body;
+      const {
+        nom,
+        prenom,
+        date_naissance,
+        classe_id,
+        nationalite,
+        bourse_id,
+        exemptions,
+        parentId,
+      } = req.body;
 
       // Validation des données obligatoires
       if (!nom || !prenom || !date_naissance || !classe_id || !nationalite) {
@@ -79,6 +93,42 @@ class EtudiantController {
           status: false,
           message: "La classe spécifiée n'existe pas",
         });
+      }
+
+      // Si un user_id est fourni, vérifier qu'il existe et qu'il est eligible (role 'user')
+      let linkedUserId = null;
+      if (req.body.user_id) {
+        // Autoriser seulement admin/sub-admin à lier un user existant
+        if (
+          !req.user ||
+          (req.user.role !== "admin" && req.user.role !== "sub-admin")
+        ) {
+          return res.status(403).json({
+            status: false,
+            message: "Non autorisé à lier un utilisateur existant",
+          });
+        }
+
+        const userDoc = await db
+          .collection("users")
+          .doc(req.body.user_id)
+          .get();
+        if (!userDoc.exists) {
+          return res.status(404).json({
+            status: false,
+            message: "Utilisateur spécifié introuvable",
+          });
+        }
+        const userData = userDoc.data();
+        if (userData.role && userData.role !== "user") {
+          return res.status(400).json({
+            status: false,
+            message:
+              "Le compte utilisateur ne peut pas être transformé en étudiant (role invalide)",
+          });
+        }
+
+        linkedUserId = userDoc.id;
       }
 
       // Vérifier que la bourse existe si elle est fournie et non vide
@@ -152,21 +202,36 @@ class EtudiantController {
         updatedAt: new Date(),
       };
 
+      if (linkedUserId) {
+        etudiantData.user_id = linkedUserId;
+      }
+
       const docRef = await this.collection.add(etudiantData);
       const newEtudiant = await docRef.get();
 
+      // Si on a lié un user, mettre à jour son role en 'etudiant'
+      if (linkedUserId) {
+        await db
+          .collection("users")
+          .doc(linkedUserId)
+          .update({ role: "etudiant", updatedAt: new Date() });
+      }
+
       // Audit log
       const auditLog = new AuditLog({
-        userId: req.user?.id || 'system',
-        action: 'CREATE_ETUDIANT',
-        entityType: 'Etudiant',
+        userId: req.user?.id || "system",
+        action: "CREATE_ETUDIANT",
+        entityType: "Etudiant",
         entityId: newEtudiant.id,
         details: { newEtudiantData: newEtudiant.data() },
       });
       await auditLog.save();
 
       // Send webhook notification
-      await sendWebhook('student.created', { studentId: newEtudiant.id, ...newEtudiant.data() });
+      await sendWebhook("student.created", {
+        studentId: newEtudiant.id,
+        ...newEtudiant.data(),
+      });
 
       return res.status(201).json({
         status: true,
@@ -264,22 +329,28 @@ class EtudiantController {
 
         // Decrypt sensitive fields
         if (etudiantData.exemptions && etudiantData.exemptions.length > 0) {
-            try {
-                etudiantData.exemptions = JSON.parse(decrypt(etudiantData.exemptions));
-            } catch (e) {
-                console.error("Error decrypting exemptions for student", doc.id, e);
-                etudiantData.exemptions = []; // Fallback to empty array on error
-            }
+          try {
+            etudiantData.exemptions = JSON.parse(
+              decrypt(etudiantData.exemptions)
+            );
+          } catch (e) {
+            console.error("Error decrypting exemptions for student", doc.id, e);
+            etudiantData.exemptions = []; // Fallback to empty array on error
+          }
         }
         if (etudiantData.parentId) {
-            etudiantData.parentId = decrypt(etudiantData.parentId);
+          etudiantData.parentId = decrypt(etudiantData.parentId);
         }
+
+        const currentYear = new Date().getFullYear();
+        const paymentStatus = await this.getPaymentStatus(doc.id, currentYear);
 
         etudiants.push({
           id: doc.id,
           ...etudiantData,
           classe: classeInfo,
           bourse: bourseInfo,
+          paymentStatus: paymentStatus, // Ajouter le statut de paiement
         });
       }
 
@@ -357,18 +428,115 @@ class EtudiantController {
         }
       }
 
+      // Récupérer le parent si disponible (après déchiffrement plus bas)
+      let parentInfo = null;
+
       // Decrypt sensitive fields
       if (etudiantData.exemptions && etudiantData.exemptions.length > 0) {
-          try {
-              etudiantData.exemptions = JSON.parse(decrypt(etudiantData.exemptions));
-          } catch (e) {
-              console.error("Error decrypting exemptions for student", id, e);
-              etudiantData.exemptions = []; // Fallback to empty array on error
-          }
+        try {
+          etudiantData.exemptions = JSON.parse(
+            decrypt(etudiantData.exemptions)
+          );
+        } catch (e) {
+          console.error("Error decrypting exemptions for student", id, e);
+          etudiantData.exemptions = []; // Fallback to empty array on error
+        }
       }
       if (etudiantData.parentId) {
-          etudiantData.parentId = decrypt(etudiantData.parentId);
+        etudiantData.parentId = decrypt(etudiantData.parentId);
+        try {
+          const parentDoc = await db
+            .collection("users")
+            .doc(etudiantData.parentId)
+            .get();
+          if (parentDoc.exists) {
+            parentInfo = { id: parentDoc.id, ...parentDoc.data() };
+          }
+        } catch (_) {
+          // ignore parent fetch errors
+        }
       }
+
+      // Récupérer un éventuel tarif actif pour la classe (type Scolarité)
+      let montantTarif = null;
+      try {
+        if (etudiantData.classe_id) {
+          const tarifsSnap = await db
+            .collection("tarifs")
+            .where("classe_id", "==", etudiantData.classe_id)
+            .where("isActive", "==", true)
+            .where("type", "==", "Scolarité")
+            .limit(1)
+            .get();
+          if (!tarifsSnap.empty) {
+            const t = tarifsSnap.docs[0].data();
+            if (typeof t.montant === "number") montantTarif = t.montant;
+          }
+        }
+      } catch (_) {
+        // ignore tarif lookup errors
+      }
+
+      // Récupérer les factures et paiements liés à cet étudiant
+      const facturesSnapshot = await db
+        .collection("factures")
+        .where("student_id", "==", id)
+        .get();
+      const factures = facturesSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      const paiementsSnapshot = await this.paiementCollection
+        .where("etudiant_id", "==", id)
+        .get();
+      const paiements = paiementsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Calculer un statut de paiement cohérent à partir des factures/paiements
+      const totalMontantDu = factures.reduce((sum, f) => {
+        const mt =
+          typeof f.montant_total === "number"
+            ? f.montant_total
+            : Number(f.montant_total) || 0;
+        return sum + mt;
+      }, 0);
+
+      const totalPayeFromInvoices = factures.reduce((sum, f) => {
+        const mp =
+          typeof f.montant_paye === "number"
+            ? f.montant_paye
+            : Number(f.montant_paye) || 0;
+        return sum + mp;
+      }, 0);
+
+      const totalPayeFromPayments = paiements.reduce((sum, p) => {
+        const mp =
+          typeof p.montantPaye === "number"
+            ? p.montantPaye
+            : Number(p.montantPaye) || 0;
+        return sum + mp;
+      }, 0);
+
+      const totalPaid =
+        totalPayeFromInvoices > 0
+          ? totalPayeFromInvoices
+          : totalPayeFromPayments;
+      const remainingAmount = Math.max(0, totalMontantDu - totalPaid);
+      let paymentWarningStatus = "OK";
+      if (remainingAmount <= 0) {
+        paymentWarningStatus = "Payée";
+      } else if (totalMontantDu > 0 && totalPaid / totalMontantDu < 0.5) {
+        paymentWarningStatus = "Avertissement: 1er Semestre (50%) non atteint";
+      }
+      const paymentStatus = {
+        totalMontantDu,
+        totalPaid,
+        remainingAmount,
+        paymentWarningStatus,
+      };
 
       const etudiant = new Etudiant({
         id: etudiantDoc.id,
@@ -381,6 +549,11 @@ class EtudiantController {
           ...etudiant.toJSON(),
           classe: classeInfo,
           bourse: bourseInfo,
+          factures,
+          paiements,
+          paymentStatus, // Statut de paiement calculé à partir des factures/paiements
+          parent: parentInfo,
+          montantTarif,
         },
       });
     } catch (error) {
@@ -400,8 +573,16 @@ class EtudiantController {
   async update(req, res) {
     try {
       const { id } = req.params;
-      const { nom, prenom, date_naissance, classe_id, nationalite, bourse_id, exemptions, parentId } =
-        req.body;
+      const {
+        nom,
+        prenom,
+        date_naissance,
+        classe_id,
+        nationalite,
+        bourse_id,
+        exemptions,
+        parentId,
+      } = req.body;
 
       if (!id) {
         return res.status(400).json({
@@ -562,16 +743,20 @@ class EtudiantController {
 
       // Audit log
       const auditLog = new AuditLog({
-        userId: req.user?.id || 'system',
-        action: 'UPDATE_ETUDIANT',
-        entityType: 'Etudiant',
+        userId: req.user?.id || "system",
+        action: "UPDATE_ETUDIANT",
+        entityType: "Etudiant",
         entityId: id,
         details: { oldData: oldEtudiantData, newData: updatedEtudiant.data() },
       });
       await auditLog.save();
 
       // Send webhook notification
-      await sendWebhook('student.updated', { studentId: id, oldData: oldEtudiantData, newData: updatedEtudiant.data() });
+      await sendWebhook("student.updated", {
+        studentId: id,
+        oldData: oldEtudiantData,
+        newData: updatedEtudiant.data(),
+      });
 
       return res.status(200).json({
         status: true,
@@ -652,16 +837,19 @@ class EtudiantController {
 
       // Audit log
       const auditLog = new AuditLog({
-        userId: req.user?.id || 'system',
-        action: 'DELETE_ETUDIANT',
-        entityType: 'Etudiant',
+        userId: req.user?.id || "system",
+        action: "DELETE_ETUDIANT",
+        entityType: "Etudiant",
         entityId: id,
         details: { deletedEtudiantData },
       });
       await auditLog.save();
 
       // Send webhook notification
-      await sendWebhook('student.deleted', { studentId: id, deletedEtudiantData });
+      await sendWebhook("student.deleted", {
+        studentId: id,
+        deletedEtudiantData,
+      });
 
       return res.status(200).json({
         status: true,
@@ -675,6 +863,97 @@ class EtudiantController {
         error: error.message,
       });
     }
+  }
+
+  // Nouvelle méthode pour calculer le statut d'avertissement de paiement
+  async getPaymentStatus(studentId, currentYear) {
+    const annualSchoolFees = 59000;
+    const annualRegistrationFees = 1800;
+
+    // Définir les dates limites des semestres (à ajuster selon le calendrier réel)
+    const midSemester1Date = new Date(`${currentYear}-11-15`); // Ex: 15 Novembre
+    const endSemester1Date = new Date(`${currentYear}-01-31`); // Ex: 31 Janvier de l'année suivante
+
+    const today = new Date();
+
+    const etudiantDoc = await this.collection.doc(studentId).get();
+    if (!etudiantDoc.exists) {
+      return {
+        totalMontantDu: 0,
+        totalPaid: 0,
+        remainingAmount: 0,
+        paymentWarningStatus: "Étudiant non trouvé",
+      };
+    }
+    const etudiantData = etudiantDoc.data();
+
+    // Calculate total amount due
+    let totalMontantDu = annualSchoolFees + annualRegistrationFees;
+
+    if (etudiantData.bourse_id) {
+      const bourseDoc = await this.boursesCollection
+        .doc(etudiantData.bourse_id)
+        .get();
+      if (bourseDoc.exists) {
+        const bourseData = bourseDoc.data();
+        totalMontantDu -= bourseData.montant; // Deduct scholarship
+      }
+    }
+
+    // Calculate total paid for the current academic year
+    // Tenter de récupérer les paiements pour l'année courante (format "YYYY")
+    let paymentsSnapshot = await this.paiementCollection
+      .where("etudiant_id", "==", studentId)
+      .where("anneeScolaire", "==", currentYear.toString())
+      .get();
+
+    // Si aucun résultat, fallback sur formats d'année scolaire "YYYY-YYYY"
+    if (paymentsSnapshot.empty) {
+      const academicYear1 = `${currentYear - 1}-${currentYear}`; // ex: 2024-2025 si currentYear=2025
+      const academicYear2 = `${currentYear}-${currentYear + 1}`; // ex: 2025-2026
+      paymentsSnapshot = await this.paiementCollection
+        .where("etudiant_id", "==", studentId)
+        .where("anneeScolaire", "in", [academicYear1, academicYear2])
+        .get()
+        .catch(() => ({ empty: true, docs: [] }));
+    }
+
+    // Si toujours vide (index manquant ou format différent), ne filtre que par étudiant
+    if (paymentsSnapshot.empty) {
+      paymentsSnapshot = await this.paiementCollection
+        .where("etudiant_id", "==", studentId)
+        .get();
+    }
+
+    let totalPaid = 0;
+    paymentsSnapshot.docs.forEach((doc) => {
+      totalPaid += doc.data().montantPaye || 0;
+    });
+
+    const remainingAmount = totalMontantDu - totalPaid;
+
+    let paymentWarningStatus = "OK";
+
+    if (remainingAmount <= 0) {
+      paymentWarningStatus = "Payée";
+    } else if (today > endSemester1Date) {
+      // After first semester ends, check if 50% paid
+      if (totalPaid < totalMontantDu * 0.5) {
+        paymentWarningStatus = "Avertissement: 1er Semestre (50%) non atteint";
+      }
+    } else if (today > midSemester1Date) {
+      // After mid-semester, check if 30% paid
+      if (totalPaid < totalMontantDu * 0.3) {
+        paymentWarningStatus = "Avertissement: Mi-semestre (30%) non atteint";
+      }
+    }
+
+    return {
+      totalMontantDu,
+      totalPaid,
+      remainingAmount,
+      paymentWarningStatus,
+    };
   }
 
   /**

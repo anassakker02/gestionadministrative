@@ -1,6 +1,6 @@
-const router = require('express').Router();
-const AuthController = require('../controllers');
-const { authenticate } = require('../../../middlewares/auth'); // Correctly destructure authenticate
+const router = require("express").Router();
+const AuthController = require("../controllers");
+const { authenticate } = require("../../../middlewares/auth"); // Correctly destructure authenticate
 
 /**
  * @swagger
@@ -149,7 +149,7 @@ const { authenticate } = require('../../../middlewares/auth'); // Correctly dest
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/register', AuthController.register.bind(AuthController));
+router.post("/register", AuthController.register.bind(AuthController));
 /**
  * @swagger
  * /auth/login:
@@ -188,7 +188,7 @@ router.post('/register', AuthController.register.bind(AuthController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/login', AuthController.login.bind(AuthController));
+router.post("/login", AuthController.login.bind(AuthController));
 // router.post('/verify_email', AuthController.verifyEmail);
 /**
  * @swagger
@@ -236,7 +236,10 @@ router.post('/login', AuthController.login.bind(AuthController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/password_reset', AuthController.sendPasswordReset.bind(AuthController));
+router.post(
+  "/password_reset",
+  AuthController.sendPasswordReset.bind(AuthController)
+);
 /**
  * @swagger
  * /auth/refresh-token:
@@ -297,9 +300,97 @@ router.post('/password_reset', AuthController.sendPasswordReset.bind(AuthControl
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/refresh-token', AuthController.refreshToken.bind(AuthController));
+router.post("/refresh-token", AuthController.refreshToken.bind(AuthController));
 
-router.get('/me', authenticate, AuthController.me.bind(AuthController)); // Use authenticate middleware
+router.get("/me", authenticate, AuthController.me.bind(AuthController)); // Use authenticate middleware
+
+// Nouvelles routes pour la gestion hiérarchique
+/**
+ * @swagger
+ * /auth/create-sub-admin:
+ *   post:
+ *     summary: Create a sub-admin (admin only)
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *               - nom
+ *               - prenom
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *               nom:
+ *                 type: string
+ *               prenom:
+ *                 type: string
+ *               telephone:
+ *                 type: string
+ *               adresse:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Sub-admin created successfully
+ *       403:
+ *         description: Only main admin can create sub-admins
+ */
+router.post(
+  "/create-sub-admin",
+  authenticate,
+  AuthController.createSubAdmin.bind(AuthController)
+);
+
+/**
+ * @swagger
+ * /auth/assign-role/{userId}:
+ *   post:
+ *     summary: Assign role to user and create corresponding entity
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - role
+ *             properties:
+ *               role:
+ *                 type: string
+ *                 enum: [etudiant, parent, enseignant, personnel, comptable, sous-admin]
+ *               additionalData:
+ *                 type: object
+ *                 description: Additional data specific to the role
+ *     responses:
+ *       200:
+ *         description: Role assigned successfully
+ *       403:
+ *         description: Not authorized to assign roles
+ */
+router.post(
+  "/assign-role/:userId",
+  authenticate,
+  AuthController.assignRole.bind(AuthController)
+);
+
 module.exports = router;
 
 /**
