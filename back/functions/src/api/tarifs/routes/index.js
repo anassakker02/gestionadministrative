@@ -321,6 +321,84 @@ router.get('/stats', tarifsController.getStats.bind(tarifsController));
 
 /**
  * @swagger
+ * /tarifs/calculate/{etudiant_id}:
+ *   get:
+ *     summary: Calculate total fees for a student
+ *     tags: [Tarifs]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: etudiant_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the student
+ *       - in: query
+ *         name: annee_scolaire
+ *         schema:
+ *           type: string
+ *         description: Academic year (optional, defaults to current year)
+ *     responses:
+ *       200:
+ *         description: Student fees calculation
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     etudiant:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         nom:
+ *                           type: string
+ *                         prenom:
+ *                           type: string
+ *                         bourse_id:
+ *                           type: string
+ *                     annee_scolaire:
+ *                       type: string
+ *                     calcul:
+ *                       type: object
+ *                       properties:
+ *                         frais_inscription:
+ *                           type: number
+ *                         frais_scolarite:
+ *                           type: number
+ *                         frais_total:
+ *                           type: number
+ *                         reduction_bourse:
+ *                           type: number
+ *                         montant_final:
+ *                           type: number
+ *                     bourse:
+ *                       type: object
+ *                       nullable: true
+ *       404:
+ *         description: Student not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get('/calculate/:etudiant_id', tarifsController.calculateStudentFees.bind(tarifsController));
+
+/**
+ * @swagger
  * /tarifs/{id}:
  *   get:
  *     summary: Get a tariff by ID

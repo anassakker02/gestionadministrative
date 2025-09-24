@@ -2,6 +2,7 @@ const Parent = require('../../../classes/Parent');
 const db = require("../../../config/firebase");
 const AuditLog = require('../../../classes/AuditLog');
 const { encrypt, decrypt } = require('../../../utils/encryption');
+const bcrypt = require('bcryptjs');
 
 class ParentController {
   constructor() {
@@ -10,43 +11,117 @@ class ParentController {
 
   async create(req, res) {
     try {
-      const { nom, prenom, email, telephone, adresse } = req.body;
+      const { nom, prenom, email, telephone, adresse, password } = req.body;
 
-      if (!nom || !prenom || !email) {
-        return res.status(400).json({ status: false, message: "Nom, prénom et email sont requis" });
+      if (!nom || !prenom || !email || !password) {
+        return res.status(400).json({ status: false, message: "Nom, prénom, email et mot de passe sont requis" });
       }
 
-      const parentData = {
+      // Vérifier si l'email existe déjà dans la table users
+      const existingUser = await db
+        .collection("users")
+        .where("email", "==", email.trim())
+        .get();
+      
+      if (!existingUser.empty) {
+        return res.status(400).json({ status: false, message: "L'email existe déjà" });
+      }
+
+      // Hash du mot de passe
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Créer l'utilisateur d'abord
+      const userData = {
+        email: email.trim(),
+        password: hashedPassword,
         nom: nom.trim(),
         prenom: prenom.trim(),
-        email: email.trim(),
-        telephone: telephone || null,
-        adresse: adresse.trim(),
+        role: "parent",
+        status: "active",
+        isActive: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
-      // Encrypt sensitive fields before saving
-      if (parentData.email) parentData.email = encrypt(parentData.email);
-      if (parentData.telephone) parentData.telephone = encrypt(parentData.telephone);
-      if (parentData.adresse) parentData.adresse = encrypt(parentData.adresse);
+      // Ajouter les champs optionnels s'ils sont fournis
+      if (telephone && telephone.trim()) {
+        userData.telephone = encrypt(telephone.trim());
+      }
+      if (adresse && adresse.trim()) {
+        userData.adresse = encrypt(adresse.trim());
+      }
 
-      const docRef = await this.collection.add(parentData);
-      const newParent = await docRef.get();
+      const userDocRef = await db.collection("users").add(userData);
 
+      // Créer le parent avec référence à l'utilisateur
+      const parentData = {
+        nom: nom.trim(),
+        prenom: prenom.trim(),
+        email: encrypt(email.trim()),
+        userId: userDocRef.id, // Référence vers l'utilisateur
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      // Ajouter les champs optionnels s'ils sont fournis
+      if (telephone && telephone.trim()) {
+        parentData.telephone = encrypt(telephone.trim());
+      }
+      if (adresse && adresse.trim()) {
+        parentData.adresse = encrypt(adresse.trim());
+      }
+
+      const parentDocRef = await this.collection.add(parentData);
+      const newParent = await parentDocRef.get();
+
+      // Audit log pour le parent
       const auditLog = new AuditLog({
         userId: req.user?.id || 'system',
         action: 'CREATE_PARENT',
         entityType: 'Parent',
         entityId: newParent.id,
-        details: { newParentData: newParent.data() },
+        details: { 
+          newParentData: newParent.data(),
+          userId: userDocRef.id 
+        },
       });
       await auditLog.save();
 
-      return res.status(201).json({ status: true, message: "Parent créé avec succès", data: { id: newParent.id, ...newParent.data() } });
+      // Audit log pour l'utilisateur
+      const userAuditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'CREATE_USER',
+        entityType: 'User',
+        entityId: userDocRef.id,
+        details: { 
+          role: 'parent',
+          parentId: newParent.id 
+        },
+      });
+      await userAuditLog.save();
+
+      return res.status(201).json({ 
+        status: true, 
+        message: "Parent et utilisateur créés avec succès", 
+        data: { 
+          id: newParent.id, 
+          userId: userDocRef.id,
+          nom: nom.trim(),
+          prenom: prenom.trim(),
+          email: email.trim(),
+          telephone: telephone ? telephone.trim() : null,
+          adresse: adresse ? adresse.trim() : null,
+        } 
+      });
     } catch (error) {
       console.error("Error creating parent:", error);
-      return res.status(500).json({ status: false, message: "Erreur lors de la création du parent" });
+      console.error("Error details:", error.message);
+      console.error("Error stack:", error.stack);
+      return res.status(500).json({ 
+        status: false, 
+        message: "Erreur lors de la création du parent",
+        error: error.message 
+      });
     }
   }
 

@@ -6,7 +6,7 @@ const ivLength = 16;
 // It is CRITICAL to securely manage this key. Consider using Google Cloud KMS or Firebase Environment Configuration for sensitive keys.
 // For now, we will use an environment variable. Ensure this is set securely in your Firebase Functions environment.
 const ENCRYPTION_KEY =
-  process.env.ENCRYPTION_KEY || "a_very_secret_key_of_at_least_32_chars"; // Must be 32 bytes (256 bits)
+  process.env.ENCRYPTION_KEY || "a_very_secret_key_of_exactly_32_chars!"; // Must be 32 bytes (256 bits)
 
 if (ENCRYPTION_KEY.length !== 32) {
   console.warn(

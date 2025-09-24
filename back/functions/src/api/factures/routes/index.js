@@ -15,10 +15,18 @@
  *           type: string
  *           nullable: true
  *           description: ID of the parent associated with the invoice (for family invoices)
+ *         paymentPlanId:
+ *           type: string
+ *           nullable: true
+ *           description: ID of the payment plan used for this invoice
  *         date_emission:
  *           type: string
  *           format: date-time
  *           description: Date of invoice emission
+ *         date_echeance:
+ *           type: string
+ *           format: date-time
+ *           description: Due date of the invoice, calculated based on payment plan if applicable
  *         montant_total:
  *           type: number
  *           format: float
@@ -104,7 +112,12 @@
  *           type: string
  *         parentId:
  *           type: string
+ *         paymentPlanId:
+ *           type: string
  *         date_emission:
+ *           type: string
+ *           format: date-time
+ *         date_echeance:
  *           type: string
  *           format: date-time
  *         montant_total:
@@ -152,7 +165,12 @@
  *           type: string
  *         parentId:
  *           type: string
+ *         paymentPlanId:
+ *           type: string
  *         date_emission:
+ *           type: string
+ *           format: date-time
+ *         date_echeance:
  *           type: string
  *           format: date-time
  *         montant_total:

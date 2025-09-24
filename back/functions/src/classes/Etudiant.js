@@ -14,6 +14,7 @@ class Etudiant {
     this.exemptions = data.exemptions || []; // New field for exemptions
     this.parentId = data.parentId || null; // New field for linking to parent
     this.numero_etudiant = data.numero_etudiant || null; // Numéro d'étudiant unique
+    this.frais_payment = data.frais_payment || 0; // Montant total des frais avec réduction de bourse
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || new Date();
   }
@@ -46,6 +47,7 @@ class Etudiant {
       exemptions: this.exemptions,
       parentId: this.parentId,
       numero_etudiant: this.numero_etudiant,
+      frais_payment: this.frais_payment,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };

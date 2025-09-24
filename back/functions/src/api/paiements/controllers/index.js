@@ -3,6 +3,7 @@ const db = require("../../../config/firebase");
 const paypal = require("@paypal/checkout-server-sdk"); // Installez le SDK PayPal
 const AuditLog = require("../../../classes/AuditLog");
 const { sendWebhook } = require("../../../utils/webhookSender");
+const FactureController = require("../../factures/controllers");
 
 class PaiementController {
   constructor() {
@@ -126,46 +127,13 @@ class PaiementController {
           message: `Paiement refusé: dépasse le plafond autorisé (${totalCap} MAD). Déjà payé: ${totalAlreadyPaid} MAD, montant saisi: ${montantPaye} MAD`,
         });
       }
-
-      // Si aucun facture_ids n'est fourni, créer une nouvelle facture
-      if (!facture_ids || facture_ids.length === 0) {
-        console.log("No facture_ids provided, creating a new invoice...");
-        const etudiantData = etudiantDataForCap;
-        const parentId = etudiantData?.parentId || null; // Supposons que l'étudiant a un parentId
-
-        const generatedNumero = `AUTO-GEN-${etudiant_id.slice(
-          0,
-          4
-        )}-${Date.now().toString().slice(-4)}`;
-        const newFactureData = {
-          // keep both keys for backward compatibility; frontend expects `etudiant_id`
-          etudiant_id: etudiant_id,
-          student_id: etudiant_id,
-          parent_id: parentId,
-          date_emission: new Date(),
-          montant_total: montantPaye,
-          montantPaye: 0,
-          montantRestant: montantPaye,
-          statut: "impayée", // La facture est initialement impayée, le paiement va la mettre à jour
-          numero: generatedNumero,
-          numero_facture: generatedNumero,
-          items: [
-            {
-              description: "Paiement direct",
-              quantity: 1,
-              unitPrice: montantPaye,
-              total: montantPaye,
-            },
-          ],
-          currency: "MAD", // Devise par défaut
-          anneeScolaire: new Date().getFullYear().toString(), // Année scolaire par défaut
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        const newFactureRef = await this.factureCollection.add(newFactureData);
-        facture_ids = [newFactureRef.id]; // Utiliser l'ID de la nouvelle facture pour le paiement
-        console.log("New invoice created with ID:", newFactureRef.id);
-      }
+      const anneeScolaireCurrent = new Date().getFullYear().toString();
+      const montant_du = Number(totalCap);
+      const montant_payee = Number(montantPaye);
+      const montant_restant = Math.max(
+        0,
+        montant_du - (totalAlreadyPaid + montant_payee)
+      );
 
       let paiementResult = {};
       if (methode === "paypal") {
@@ -212,56 +180,45 @@ class PaiementController {
         payer_user_id,
         enregistre_par,
         recordedBy_user_id: req.user?.id || "system", // backward-compatible field
+        // Champs trio annuels pour ce paiement
+        montant_du,
+        montant_payee,
+        montant_restant,
+        annee_scolaire: anneeScolaireCurrent,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
       const docRef = await this.collection.add(paiementData);
       const newPaiement = await docRef.get();
 
-      // Mettre à jour les factures associées
-      let totalPaidForInvoices = 0;
-      const updatedInvoicesData = [];
+      // Mettre à jour les factures associées (ou générer une nouvelle facture si aucune n'est fournie)
+      let generatedFactureId = null;
 
-      for (const factureId of facture_ids) {
-        const factureRef = this.factureCollection.doc(factureId);
-        const factureDoc = await factureRef.get();
+      // Always generate a new invoice after a payment
+      // The generateAfterPayment method will handle cumulative totals on the invoice and student's paymentStatus
+      const factureGenerationResult =
+        await FactureController.generateAfterPayment({
+          body: {
+            student_id: etudiant_id,
+            montant_paye: Number(montantPaye),
+            mode_paiement: methode,
+            qui_a_paye: qui_a_paye,
+            enregistre_par: enregistre_par,
+            reference_externe: paiementResult.paypalOrderId || null,
+          },
+          user: req.user, // Pass the current user for 'imprimé par'
+        });
 
-        if (factureDoc.exists) {
-          const oldFactureData = factureDoc.data();
-          let currentMontantPaye = oldFactureData.montantPaye || 0;
-          let currentMontantRestant =
-            oldFactureData.montantRestant || oldFactureData.montant_total;
-
-          const amountToApply = Math.min(
-            montantPaye - totalPaidForInvoices,
-            currentMontantRestant
-          );
-
-          if (amountToApply > 0) {
-            currentMontantPaye += amountToApply;
-            currentMontantRestant -= amountToApply;
-            totalPaidForInvoices += amountToApply;
-
-            let newStatut = "impayée";
-            if (currentMontantRestant <= 0) {
-              newStatut = "payée";
-            } else if (currentMontantPaye > 0) {
-              newStatut = "partielle";
-            }
-
-            await factureRef.update({
-              montantPaye: currentMontantPaye,
-              montantRestant: currentMontantRestant,
-              statut: newStatut,
-              updatedAt: new Date(),
-            });
-            updatedInvoicesData.push({
-              id: factureId,
-              oldData: oldFactureData,
-              newData: (await factureRef.get()).data(),
-            });
-          }
-        }
+      if (factureGenerationResult.status && factureGenerationResult.data?.id) {
+        generatedFactureId = factureGenerationResult.data.id;
+        // Update the payment document with the ID of the newly generated invoice
+        await docRef.update({ facture_ids: [generatedFactureId] });
+      } else {
+        console.error(
+          "Facture auto-generation failed:",
+          factureGenerationResult.message
+        );
+        // Handle error or fallback if invoice generation fails
       }
 
       // Audit log for payment creation
@@ -272,7 +229,7 @@ class PaiementController {
         entityId: newPaiement.id,
         details: {
           newPaiementData: newPaiement.data(),
-          updatedInvoices: updatedInvoicesData,
+          generatedFactureId: generatedFactureId,
         },
       });
       await auditLog.save();
@@ -281,13 +238,18 @@ class PaiementController {
       await sendWebhook("payment.succeeded", {
         paymentId: newPaiement.id,
         ...newPaiement.data(),
-        updatedInvoices: updatedInvoicesData,
+        generatedFactureId: generatedFactureId,
       });
 
       return res.status(201).json({
         status: true,
         message: "Paiement créé avec succès",
-        data: { id: newPaiement.id, ...newPaiement.data(), ...paiementResult },
+        data: {
+          id: newPaiement.id,
+          ...newPaiement.data(),
+          ...paiementResult,
+          generatedFactureId,
+        },
       });
     } catch (error) {
       console.error("Erreur création paiement:", error);
@@ -312,17 +274,48 @@ class PaiementController {
       });
       let query = this.collection;
       if (etuFromQuery) {
-        // Les documents stockent le champ "etudiant_id"
         query = query.where("etudiant_id", "==", etuFromQuery);
       }
       if (status) {
         query = query.where("status", "==", status);
       }
-      const snapshot = await query.orderBy("createdAt", "desc").get();
-      const paiements = snapshot.docs.map((doc) => ({
+      // Essayer avec orderBy si possible
+      let snapshot;
+      try {
+        snapshot = await query.orderBy("createdAt", "desc").get();
+      } catch (e) {
+        console.warn(
+          "PaiementController: getAll - orderBy failed, retrying without orderBy:",
+          e?.message
+        );
+        snapshot = await query.get();
+      }
+      let paiements = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
+      console.log(
+        `PaiementController: getAll - fetched ${paiements.length} paiements (by etudiant_id)`
+      );
+
+      // Fallback: si on filtre par étudiant et aucun résultat, tenter qui_a_paye
+      if (etuFromQuery && paiements.length === 0) {
+        let q2 = this.collection.where("qui_a_paye", "==", etuFromQuery);
+        if (status) q2 = q2.where("status", "==", status);
+        let snap2;
+        try {
+          snap2 = await q2.orderBy("createdAt", "desc").get();
+        } catch (e2) {
+          snap2 = await q2.get();
+        }
+        const alt = snap2.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        if (alt.length > 0) {
+          console.log(
+            `PaiementController: getAll - fallback qui_a_paye returned ${alt.length}`
+          );
+          paiements = alt;
+        }
+      }
       return res.status(200).json({ status: true, data: paiements });
     } catch (error) {
       return res.status(500).json({
@@ -435,6 +428,96 @@ class PaiementController {
         }
       }
 
+      // Recalculer et mettre à jour le triplet (montant_du, montant_payee, montant_restant) sur ce paiement après modification
+      try {
+        const pData = (await paiementRef.get()).data() || {};
+        const etudiantIdForCap = pData.etudiant_id;
+        if (etudiantIdForCap) {
+          // recalculer le plafond annuel et le total déjà payé (hors ce paiement puis incluant)
+          const etuDoc = await this.etudiantCollection
+            .doc(etudiantIdForCap)
+            .get();
+          if (etuDoc.exists) {
+            // Calcule plafond identique à create()
+            let tuitionAmount = 0;
+            let otherFeesAmount = 0;
+            try {
+              const classId = etuDoc.data()?.classe_id;
+              const anneeScolaireCurrent = new Date().getFullYear().toString();
+              if (classId) {
+                const tuitionSnap = await db
+                  .collection("tarifs")
+                  .where("classe_id", "==", classId)
+                  .where("annee_scolaire", "==", anneeScolaireCurrent)
+                  .where("type", "==", "Scolarité")
+                  .where("isActive", "==", true)
+                  .limit(1)
+                  .get();
+                if (!tuitionSnap.empty)
+                  tuitionAmount =
+                    Number(tuitionSnap.docs[0].data().montant) || 0;
+                const otherSnap = await db
+                  .collection("tarifs")
+                  .where("classe_id", "==", classId)
+                  .where("annee_scolaire", "==", anneeScolaireCurrent)
+                  .where("type", "==", "Autres frais")
+                  .where("isActive", "==", true)
+                  .limit(1)
+                  .get();
+                if (!otherSnap.empty)
+                  otherFeesAmount =
+                    Number(otherSnap.docs[0].data().montant) || 0;
+              }
+            } catch {}
+            if (!tuitionAmount) tuitionAmount = 56000;
+            if (!otherFeesAmount) otherFeesAmount = 800;
+            let totalCap = tuitionAmount + otherFeesAmount;
+            try {
+              const bourseId = etuDoc.data()?.bourse_id;
+              if (bourseId) {
+                const bourseDoc = await db
+                  .collection("bourses")
+                  .doc(bourseId)
+                  .get();
+                if (bourseDoc.exists) {
+                  const pr = Number(bourseDoc.data()?.pourcentage_remise) || 0;
+                  if (pr > 0) {
+                    const tuitionAfter = Math.max(
+                      0,
+                      tuitionAmount * (1 - pr / 100)
+                    );
+                    totalCap = tuitionAfter + otherFeesAmount;
+                  }
+                }
+              }
+            } catch {}
+
+            // total déjà payé par l'étudiant (somme de tous paiements)
+            const allPaymentsSnap = await this.collection
+              .where("etudiant_id", "==", etudiantIdForCap)
+              .get();
+            const totalPaidAll = allPaymentsSnap.docs.reduce((acc, d) => {
+              const v = Number(d.data().montantPaye) || 0;
+              return acc + v;
+            }, 0);
+            // Pour ce paiement, considérer son montant actuel
+            const montantPayeeCurrent =
+              Number((await paiementRef.get()).data()?.montantPaye) || 0;
+            const montantRestant = Math.max(0, Number(totalCap) - totalPaidAll);
+            await paiementRef.update({
+              montant_du: Number(totalCap),
+              montant_payee: montantPayeeCurrent,
+              montant_restant: montantRestant,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn(
+          "Paiement update: recalcul des montants échoué:",
+          e?.message
+        );
+      }
+
       // Audit log for payment update
       const auditLog = new AuditLog({
         userId: req.user?.id || "system",
@@ -475,6 +558,7 @@ class PaiementController {
   async delete(req, res) {
     try {
       const { id } = req.params;
+
       const paiementRef = this.collection.doc(id);
       const paiementDoc = await paiementRef.get();
       if (!paiementDoc.exists) {
@@ -488,7 +572,7 @@ class PaiementController {
 
       await paiementRef.delete();
 
-      // Recalculate invoice balances for affected invoices
+      // Recalculer les soldes des factures impactées
       for (const factureId of affectedFactureIds) {
         const factureRef = this.factureCollection.doc(factureId);
         const factureDoc = await factureRef.get();
@@ -497,7 +581,7 @@ class PaiementController {
           const factureData = factureDoc.data();
           let totalPaid = 0;
 
-          // Sum all remaining payments for this invoice
+          // Somme des paiements restants pour cette facture
           const paymentsSnapshot = await this.collection
             .where("facture_ids", "array-contains", factureId)
             .get();
@@ -506,10 +590,11 @@ class PaiementController {
           });
 
           let newStatut = "impayée";
-          let montantRestant = factureData.montant_total - totalPaid;
+          let montantRestant = (factureData.montant_total || 0) - totalPaid;
 
           if (montantRestant <= 0) {
             newStatut = "payée";
+            montantRestant = 0;
           } else if (totalPaid > 0) {
             newStatut = "partielle";
           }

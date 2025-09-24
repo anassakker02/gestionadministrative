@@ -13,6 +13,7 @@ class EtudiantController {
     this.paiementCollection = db.collection("paiements");
     this.userCollection = db.collection("users");
     this.classesCollection = db.collection("classes");
+    this.paymentPlansCollection = db.collection("payment_plans"); // Add this line
   }
 
   /**
@@ -30,6 +31,10 @@ class EtudiantController {
         bourse_id,
         exemptions,
         parentId,
+        
+        paymentPlanId,
+        paymentOverride,
+        overdueNotificationsMutedUntil,
       } = req.body;
 
       // Validation des données obligatoires
@@ -78,11 +83,22 @@ class EtudiantController {
         age--;
       }
 
-      if (age < 18 || age > 36) {
+      if (age < 3 || age > 25) {
         return res.status(400).json({
           status: false,
           message: "L'âge doit être entre 3 et 25 ans",
         });
+      }
+
+      // Vérifier si code_massar est unique si fourni
+      if (code_massar) {
+        const existingMassar = await db.collection("etudiants").where("code_massar", "==", code_massar).get();
+        if (!existingMassar.empty) {
+          return res.status(409).json({
+            status: false,
+            message: "Un étudiant avec ce code Massar existe déjà."
+          });
+        }
       }
 
       // Vérifier que la classe existe
@@ -185,6 +201,68 @@ class EtudiantController {
       });
       if (montantFinal < 0) montantFinal = 0;
 
+      // Calculer frais_payment : montant total des frais (scolarité + inscription)
+      let fraisPayment = 0;
+      
+      // Récupérer les frais globaux pour l'année scolaire actuelle
+      const currentYear = new Date().getFullYear();
+      const academicYear = `${currentYear}-${currentYear + 1}`;
+      
+      // Récupérer les frais d'inscription (type "Scolarité" avec nom "Frais Inscription")
+      const fraisInscriptionSnapshot = await db
+        .collection("tarifs")
+        .where("annee_scolaire", "==", academicYear)
+        .where("isActive", "==", true)
+        .where("type", "==", "Scolarité")
+        .where("nom", "==", "Frais Inscription")
+        .get();
+
+      // Récupérer les frais de scolarité (type "Scolarité" avec nom "Frais scolaire")
+      const fraisScolariteSnapshot = await db
+        .collection("tarifs")
+        .where("annee_scolaire", "==", academicYear)
+        .where("isActive", "==", true)
+        .where("type", "==", "Scolarité")
+        .where("nom", "==", "Frais scolaire")
+        .get();
+
+      // Calculer le total des frais
+      let montantInscription = 0;
+      let montantScolarite = 0;
+      
+      if (!fraisInscriptionSnapshot.empty) {
+        montantInscription = fraisInscriptionSnapshot.docs[0].data().montant || 0;
+        fraisPayment += montantInscription;
+        console.log(`Frais d'inscription trouvé: ${montantInscription} MAD`);
+      } else {
+        console.log('Aucun frais d\'inscription trouvé');
+      }
+      
+      if (!fraisScolariteSnapshot.empty) {
+        montantScolarite = fraisScolariteSnapshot.docs[0].data().montant || 0;
+        fraisPayment += montantScolarite;
+        console.log(`Frais de scolarité trouvé: ${montantScolarite} MAD`);
+      } else {
+        console.log('Aucun frais de scolarité trouvé');
+      }
+      
+      console.log(`Total frais_payment calculé: ${fraisPayment} MAD (Inscription: ${montantInscription} + Scolarité: ${montantScolarite})`);
+
+      // Appliquer la réduction de bourse si l'étudiant a une bourse
+      if (bourse_id && bourse_id.trim() !== "") {
+        const bourseDoc = await db.collection("bourses").doc(bourse_id).get();
+        if (bourseDoc.exists) {
+          const bourseData = bourseDoc.data();
+          if (bourseData.pourcentage_remise) {
+            // Réduction en pourcentage
+            fraisPayment = fraisPayment * (1 - bourseData.pourcentage_remise / 100);
+          } else if (bourseData.montant_remise) {
+            // Réduction en montant fixe
+            fraisPayment = Math.max(0, fraisPayment - bourseData.montant_remise);
+          }
+        }
+      }
+
       // Créer le nouvel étudiant
       const etudiantData = {
         nom: nom.trim(),
@@ -195,9 +273,14 @@ class EtudiantController {
         bourse_id: bourse_id && bourse_id.trim() !== "" ? bourse_id : null,
         exemptions: exemptions ? encrypt(JSON.stringify(exemptions)) : [], // Add exemptions, encrypt them
         parentId: parentId ? encrypt(parentId) : null, // Add parentId, encrypt it
+        code_massar: code_massar || null,
+        paymentPlanId: paymentPlanId || null,
+        paymentOverride: paymentOverride || false,
+        overdueNotificationsMutedUntil: overdueNotificationsMutedUntil || null,
         tarif_id: tarif ? tarif.id : null,
         montant_tarif: montantFinal,
         reductions: reductions,
+        frais_payment: fraisPayment, // Montant total des frais avec réduction de bourse
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -554,6 +637,10 @@ class EtudiantController {
           paymentStatus, // Statut de paiement calculé à partir des factures/paiements
           parent: parentInfo,
           montantTarif,
+          
+          paymentPlanId: etudiantData.paymentPlanId || null,
+          paymentOverride: etudiantData.paymentOverride || false,
+          overdueNotificationsMutedUntil: etudiantData.overdueNotificationsMutedUntil || null,
         },
       });
     } catch (error) {
@@ -582,6 +669,10 @@ class EtudiantController {
         bourse_id,
         exemptions,
         parentId,
+        code_massar,
+        paymentPlanId,
+        paymentOverride,
+        overdueNotificationsMutedUntil,
       } = req.body;
 
       if (!id) {
@@ -734,6 +825,82 @@ class EtudiantController {
       if (parentId !== undefined) {
         updateData.parentId = encrypt(parentId);
       }
+      if (code_massar !== undefined) {
+        // Check for uniqueness if code_massar is being updated
+        if (code_massar && code_massar !== currentData.code_massar) {
+          const existingMassar = await db.collection("etudiants").where("code_massar", "==", code_massar).get();
+          if (!existingMassar.empty) {
+            return res.status(409).json({
+              status: false,
+              message: "Un autre étudiant avec ce code Massar existe déjà."
+            });
+          }
+        }
+        updateData.code_massar = code_massar;
+      }
+      if (paymentPlanId !== undefined) {
+        updateData.paymentPlanId = paymentPlanId;
+      }
+      if (paymentOverride !== undefined) {
+        updateData.paymentOverride = paymentOverride;
+      }
+      if (overdueNotificationsMutedUntil !== undefined) {
+        updateData.overdueNotificationsMutedUntil = overdueNotificationsMutedUntil;
+      }
+
+      // Recalculer frais_payment si bourse_id ou classe_id change
+      if (bourse_id !== undefined || classe_id !== undefined) {
+        let fraisPayment = 0;
+        
+        // Récupérer les frais globaux pour l'année scolaire actuelle
+        const currentYear = new Date().getFullYear();
+        const academicYear = `${currentYear}-${currentYear + 1}`;
+        
+        // Récupérer les frais d'inscription (type "Scolarité" avec nom "Frais Inscription")
+        const fraisInscriptionSnapshot = await db
+          .collection("tarifs")
+          .where("annee_scolaire", "==", academicYear)
+          .where("isActive", "==", true)
+          .where("type", "==", "Scolarité")
+          .where("nom", "==", "Frais Inscription")
+          .get();
+
+        // Récupérer les frais de scolarité (type "Scolarité" avec nom "Frais scolaire")
+        const fraisScolariteSnapshot = await db
+          .collection("tarifs")
+          .where("annee_scolaire", "==", academicYear)
+          .where("isActive", "==", true)
+          .where("type", "==", "Scolarité")
+          .where("nom", "==", "Frais scolaire")
+          .get();
+
+        // Calculer le total des frais
+        if (!fraisInscriptionSnapshot.empty) {
+          fraisPayment += fraisInscriptionSnapshot.docs[0].data().montant || 0;
+        }
+        
+        if (!fraisScolariteSnapshot.empty) {
+          fraisPayment += fraisScolariteSnapshot.docs[0].data().montant || 0;
+        }
+
+        // Appliquer la réduction de bourse si l'étudiant a une bourse
+        const finalBourseId = bourse_id !== undefined ? bourse_id : currentData.bourse_id;
+        if (finalBourseId && finalBourseId.trim() !== "") {
+          const bourseDoc = await db.collection("bourses").doc(finalBourseId).get();
+          if (bourseDoc.exists) {
+            const bourseData = bourseDoc.data();
+            if (bourseData.pourcentage_remise) {
+              // Réduction en pourcentage
+              fraisPayment = fraisPayment * (1 - bourseData.pourcentage_remise / 100);
+            } else if (bourseData.montant_remise) {
+              // Réduction en montant fixe
+              fraisPayment = Math.max(0, fraisPayment - bourseData.montant_remise);
+            }
+          }
+        }
+
+        updateData.frais_payment = fraisPayment;
+      }
 
       // Mettre à jour l'étudiant
       await etudiantRef.update(updateData);
@@ -867,15 +1034,6 @@ class EtudiantController {
 
   // Nouvelle méthode pour calculer le statut d'avertissement de paiement
   async getPaymentStatus(studentId, currentYear) {
-    const annualSchoolFees = 59000;
-    const annualRegistrationFees = 1800;
-
-    // Définir les dates limites des semestres (à ajuster selon le calendrier réel)
-    const midSemester1Date = new Date(`${currentYear}-11-15`); // Ex: 15 Novembre
-    const endSemester1Date = new Date(`${currentYear}-01-31`); // Ex: 31 Janvier de l'année suivante
-
-    const today = new Date();
-
     const etudiantDoc = await this.collection.doc(studentId).get();
     if (!etudiantDoc.exists) {
       return {
@@ -883,12 +1041,53 @@ class EtudiantController {
         totalPaid: 0,
         remainingAmount: 0,
         paymentWarningStatus: "Étudiant non trouvé",
+        isOverdue: false,
+        expectedPaidPercentage: 0,
       };
     }
     const etudiantData = etudiantDoc.data();
 
-    // Calculate total amount due
-    let totalMontantDu = annualSchoolFees + annualRegistrationFees;
+    // Check for payment override
+    if (etudiantData.paymentOverride) {
+      const mutedUntil = etudiantData.overdueNotificationsMutedUntil ? new Date(etudiantData.overdueNotificationsMutedUntil) : null;
+      if (!mutedUntil || mutedUntil > new Date()) {
+        return {
+          totalMontantDu: 0,
+          totalPaid: 0,
+          remainingAmount: 0,
+          paymentWarningStatus: "Paiement ignoré par comptable",
+          isOverdue: false,
+          expectedPaidPercentage: 0,
+        };
+      }
+    }
+
+    // Define default payment plan (if no specific plan assigned to student)
+    const defaultPaymentPlan = {
+      installments: [
+        { percentage: 15, dueDateOffsetMonths: 0, description: "1ère tranche (Octobre)" }, // Oct
+        { percentage: 35, dueDateOffsetMonths: 4, description: "2ème tranche (Février)" }, // Feb (15+35=50%)
+        { percentage: 50, dueDateOffsetMonths: 8, description: "Solde (Juin)" },    // June (50+50=100%)
+      ],
+    };
+
+    let paymentPlan = defaultPaymentPlan;
+    if (etudiantData.paymentPlanId) {
+      const planDoc = await this.paymentPlansCollection.doc(etudiantData.paymentPlanId).get();
+      if (planDoc.exists) {
+        paymentPlan = { ...planDoc.data(), id: planDoc.id };
+      }
+    }
+
+    // Calculate total amount due (using the annual fee logic for simplicity for now)
+    let totalMontantDu = etudiantData.montant_tarif || 0; // Assuming montant_tarif is the annual fee
+
+    // If montant_tarif is not directly available, fallback to fixed values or a default calculation
+    if (totalMontantDu === 0) {
+      const annualSchoolFees = 59000;
+      const annualRegistrationFees = 1800;
+      totalMontantDu = annualSchoolFees + annualRegistrationFees;
+    }
 
     if (etudiantData.bourse_id) {
       const bourseDoc = await this.boursesCollection
@@ -907,22 +1106,16 @@ class EtudiantController {
       .where("anneeScolaire", "==", currentYear.toString())
       .get();
 
-    // Si aucun résultat, fallback sur formats d'année scolaire "YYYY-YYYY"
+    // If no results, fallback on academic year formats "YYYY-YYYY" (Oct-Sept)
     if (paymentsSnapshot.empty) {
-      const academicYear1 = `${currentYear - 1}-${currentYear}`; // ex: 2024-2025 si currentYear=2025
-      const academicYear2 = `${currentYear}-${currentYear + 1}`; // ex: 2025-2026
+      const academicYearStart = new Date(`${currentYear}-10-01`); // Academic year starts in October
+      const academicYearEnd = new Date(`${currentYear + 1}-09-30`); // Ends next September
       paymentsSnapshot = await this.paiementCollection
         .where("etudiant_id", "==", studentId)
-        .where("anneeScolaire", "in", [academicYear1, academicYear2])
+        .where("date", ">=", academicYearStart.toISOString())
+        .where("date", "<=", academicYearEnd.toISOString())
         .get()
         .catch(() => ({ empty: true, docs: [] }));
-    }
-
-    // Si toujours vide (index manquant ou format différent), ne filtre que par étudiant
-    if (paymentsSnapshot.empty) {
-      paymentsSnapshot = await this.paiementCollection
-        .where("etudiant_id", "==", studentId)
-        .get();
     }
 
     let totalPaid = 0;
@@ -930,22 +1123,33 @@ class EtudiantController {
       totalPaid += doc.data().montantPaye || 0;
     });
 
-    const remainingAmount = totalMontantDu - totalPaid;
+    const remainingAmount = Math.max(0, totalMontantDu - totalPaid);
 
     let paymentWarningStatus = "OK";
+    let isOverdue = false;
+    let expectedPaidPercentage = 0;
+
+    const today = new Date();
+    const academicYearStartDate = new Date(`${currentYear}-10-01`); // Assuming academic year starts in October
+
+    // Calculate expected paid percentage based on current date and payment plan
+    for (const inst of paymentPlan.installments) {
+      const dueDate = new Date(academicYearStartDate);
+      dueDate.setMonth(academicYearStartDate.getMonth() + inst.dueDateOffsetMonths);
+
+      if (today >= dueDate) {
+        expectedPaidPercentage += inst.percentage;
+      }
+    }
+
+    const expectedPaidAmount = totalMontantDu * (expectedPaidPercentage / 100);
 
     if (remainingAmount <= 0) {
       paymentWarningStatus = "Payée";
-    } else if (today > endSemester1Date) {
-      // After first semester ends, check if 50% paid
-      if (totalPaid < totalMontantDu * 0.5) {
-        paymentWarningStatus = "Avertissement: 1er Semestre (50%) non atteint";
-      }
-    } else if (today > midSemester1Date) {
-      // After mid-semester, check if 30% paid
-      if (totalPaid < totalMontantDu * 0.3) {
-        paymentWarningStatus = "Avertissement: Mi-semestre (30%) non atteint";
-      }
+      isOverdue = false;
+    } else if (totalPaid < expectedPaidAmount) {
+      paymentWarningStatus = `Avertissement: ${expectedPaidPercentage}% dû non atteint.`;
+      isOverdue = true;
     }
 
     return {
@@ -953,6 +1157,8 @@ class EtudiantController {
       totalPaid,
       remainingAmount,
       paymentWarningStatus,
+      isOverdue,
+      expectedPaidPercentage,
     };
   }
 
@@ -1112,6 +1318,111 @@ class EtudiantController {
       return res.status(500).json({
         status: false,
         message: "Erreur lors de la récupération des statistiques",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Recalculer les frais_payment pour tous les étudiants
+   * POST /etudiants/recalculate-fees
+   */
+  async recalculateFees(req, res) {
+    try {
+      // Seuls admin et comptable peuvent utiliser cette route
+      if (
+        !req.user ||
+        (req.user.role !== "admin" && req.user.role !== "comptable")
+      ) {
+        return res.status(403).json({
+          status: false,
+          message: "Non autorisé",
+        });
+      }
+
+      const currentYear = new Date().getFullYear();
+      const academicYear = `${currentYear}-${currentYear + 1}`;
+      
+      // Récupérer les frais globaux
+      const fraisInscriptionSnapshot = await db
+        .collection("tarifs")
+        .where("annee_scolaire", "==", academicYear)
+        .where("isActive", "==", true)
+        .where("type", "==", "Scolarité")
+        .where("nom", "==", "Frais Inscription")
+        .get();
+
+      const fraisScolariteSnapshot = await db
+        .collection("tarifs")
+        .where("annee_scolaire", "==", academicYear)
+        .where("isActive", "==", true)
+        .where("type", "==", "Scolarité")
+        .where("nom", "==", "Frais scolaire")
+        .get();
+
+      let fraisGlobaux = 0;
+      if (!fraisInscriptionSnapshot.empty) {
+        fraisGlobaux += fraisInscriptionSnapshot.docs[0].data().montant || 0;
+      }
+      
+      if (!fraisScolariteSnapshot.empty) {
+        fraisGlobaux += fraisScolariteSnapshot.docs[0].data().montant || 0;
+      }
+
+      // Récupérer tous les étudiants
+      const etudiantsSnapshot = await this.collection.get();
+      let updatedCount = 0;
+      let errorCount = 0;
+
+      for (const doc of etudiantsSnapshot.docs) {
+        try {
+          const etudiantData = doc.data();
+          let fraisPayment = fraisGlobaux;
+
+          // Appliquer la réduction de bourse si l'étudiant a une bourse
+          if (etudiantData.bourse_id && etudiantData.bourse_id.trim() !== "") {
+            const bourseDoc = await db.collection("bourses").doc(etudiantData.bourse_id).get();
+            if (bourseDoc.exists) {
+              const bourseData = bourseDoc.data();
+              if (bourseData.pourcentage_remise) {
+                // Réduction en pourcentage
+                fraisPayment = fraisPayment * (1 - bourseData.pourcentage_remise / 100);
+              } else if (bourseData.montant_remise) {
+                // Réduction en montant fixe
+                fraisPayment = Math.max(0, fraisPayment - bourseData.montant_remise);
+              }
+            }
+          }
+
+          // Mettre à jour l'étudiant
+          await doc.ref.update({
+            frais_payment: fraisPayment,
+            updatedAt: new Date(),
+          });
+
+          updatedCount++;
+        } catch (error) {
+          console.error(`Erreur lors de la mise à jour de l'étudiant ${doc.id}:`, error);
+          errorCount++;
+        }
+      }
+
+      return res.status(200).json({
+        status: true,
+        message: `Recalcul terminé. ${updatedCount} étudiants mis à jour, ${errorCount} erreurs.`,
+        data: {
+          updatedCount,
+          errorCount,
+          totalStudents: etudiantsSnapshot.size,
+          fraisGlobaux,
+          academicYear,
+        },
+      });
+    } catch (error) {
+      console.error("Erreur lors du recalcul des frais:", error);
+      return res.status(500).json({
+        status: false,
+        message: "Erreur lors du recalcul des frais",
         error: error.message,
       });
     }

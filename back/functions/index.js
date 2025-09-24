@@ -1,4 +1,4 @@
-require('dotenv').config();
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
@@ -11,17 +11,29 @@ server.use(bodyParser.urlencoded({ extended: true }));
 server.use(helmet());
 
 // ✅ Allowed origins (CORS)
-const allowedOrigins = ["http://localhost:8080", "http://127.0.0.1:8080"];
+const allowedOrigins = [
+  "http://localhost:8080",
+  "http://127.0.0.1:8080",
+  // Ports alternatifs pour Vite
+  "http://localhost:8081",
+  "http://127.0.0.1:8081",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
 
 // CORS options: allow credentials and handle preflight globally
 const corsOptions = {
   origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps, curl) or from allowed dev origins
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
+    // allow requests with no origin (like mobile apps, curl)
+    if (!origin) return callback(null, true);
+
+    // Autoriser localhost, 127.0.0.1 et IPs privées (192.168.x.x, 10.x.x.x, 172.16-31.x.x) en dev
+    const privateIpRegex =
+      /^http:\/\/(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\./;
+    if (allowedOrigins.includes(origin) || privateIpRegex.test(origin)) {
+      return callback(null, true);
     }
+    return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
   methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],

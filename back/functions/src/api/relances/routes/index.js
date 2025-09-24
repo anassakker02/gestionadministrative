@@ -33,6 +33,16 @@
  *           format: date-time
  *           nullable: true
  *           description: Date of response to the reminder, if any
+ *         messageContent:
+ *           type: string
+ *           description: The content of the reminder message (for email, SMS, or call notes)
+ *         periodeCible:
+ *           type: string
+ *           description: Target period for the payment (e.g., 'Jan-2025')
+ *         montantPeriodeDu:
+ *           type: number
+ *           format: float
+ *           description: Amount due for the target period
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -73,6 +83,16 @@
  *           format: date-time
  *           nullable: true
  *           description: Date of response to the reminder, if any
+ *         periodeCible:
+ *           type: string
+ *           description: Target period for the payment (e.g., 'Jan-2025')
+ *         montantPeriodeDu:
+ *           type: number
+ *           format: float
+ *           description: Amount due for the target period
+ *         messageContent:
+ *           type: string
+ *           description: The content of the reminder message (for email, SMS, or call notes)
  *     UpdateRelanceRequest:
  *       type: object
  *       properties:
@@ -100,6 +120,16 @@
  *           format: date-time
  *           nullable: true
  *           description: Date of response to the reminder, if any
+ *         periodeCible:
+ *           type: string
+ *           description: Target period for the payment (e.g., 'Jan-2025')
+ *         montantPeriodeDu:
+ *           type: number
+ *           format: float
+ *           description: Amount due for the target period
+ *         messageContent:
+ *           type: string
+ *           description: The content of the reminder message (for email, SMS, or call notes)
  *     UpdateRelanceEffectivenessRequest:
  *       type: object
  *       required:
@@ -427,5 +457,118 @@ router.delete('/:id', relancesController.delete.bind(relancesController));
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.patch('/:id/effectiveness', relancesController.updateRelanceEffectiveness.bind(relancesController));
+
+/**
+ * @swagger
+ * /relances/send-email:
+ *   post:
+ *     summary: Send a reminder email
+ *     tags: [Relances]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - relanceId
+ *               - to
+ *               - subject
+ *               - messageContent
+ *             properties:
+ *               relanceId:
+ *                 type: string
+ *                 description: ID of the reminder to send the email for
+ *               to:
+ *                 type: string
+ *                 format: email
+ *                 description: Recipient email address
+ *               subject:
+ *                 type: string
+ *                 description: Subject of the email
+ *               messageContent:
+ *                 type: string
+ *                 description: HTML content of the email message
+ *     responses:
+ *       200:
+ *         description: Email sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ *       400:
+ *         description: Invalid input
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Reminder not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.post('/send-email', relancesController.sendEmailReminder.bind(relancesController));
+
+/**
+ * @swagger
+ * /relances/send-message:
+ *   post:
+ *     summary: Send a reminder message (e.g., SMS)
+ *     tags: [Relances]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - relanceId
+ *               - messageContent
+ *             properties:
+ *               relanceId:
+ *                 type: string
+ *                 description: ID of the reminder to send the message for
+ *               messageContent:
+ *                 type: string
+ *                 description: Content of the message
+ *     responses:
+ *       200:
+ *         description: Message sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ *       400:
+ *         description: Invalid input
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Reminder not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.post('/send-message', relancesController.sendMessageReminder.bind(relancesController));
 
 module.exports = router;

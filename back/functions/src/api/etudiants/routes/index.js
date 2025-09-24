@@ -51,11 +51,25 @@ const etudiantController = require('../controllers');
  *         parentId:
  *           type: string
  *           description: Optional ID of the parent linked to the student
+ *         
+ *         paymentPlanId:
+ *           type: string
+ *           description: ID of the payment plan associated with the student
+ *         paymentOverride:
+ *           type: boolean
+ *           description: Flag to indicate if payment status is manually overridden by accountant
+ *         overdueNotificationsMutedUntil:
+ *           type: string
+ *           format: date-time
+ *           description: Timestamp until when overdue notifications are muted
  *         exemptions:
  *           type: array
  *           items:
  *             type: string
  *           description: List of exemptions for the student
+ *         frais_payment:
+ *           type: number
+ *           description: Total amount of fees (tuition + registration) that the student must pay, with scholarship reduction applied
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -102,10 +116,15 @@ const etudiantController = require('../controllers');
  *           type: string
  *         parentId:
  *           type: string
- *         exemptions:
- *           type: array
- *           items:
- *             type: string
+ *         code_massar:
+ *           type: string
+ *         paymentPlanId:
+ *           type: string
+ *         paymentOverride:
+ *           type: boolean
+ *         overdueNotificationsMutedUntil:
+ *           type: string
+ *           format: date-time
  *     UpdateEtudiantRequest:
  *       type: object
  *       properties:
@@ -136,6 +155,15 @@ const etudiantController = require('../controllers');
  *           type: string
  *         parentId:
  *           type: string
+ *         code_massar:
+ *           type: string
+ *         paymentPlanId:
+ *           type: string
+ *         paymentOverride:
+ *           type: boolean
+ *         overdueNotificationsMutedUntil:
+ *           type: string
+ *           format: date-time
  *         exemptions:
  *           type: array
  *           items:
@@ -352,6 +380,61 @@ router.get('/search', etudiantController.search.bind(etudiantController));
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/stats', etudiantController.getStats.bind(etudiantController));
+
+/**
+ * @swagger
+ * /etudiants/recalculate-fees:
+ *   post:
+ *     summary: Recalculate fees for all students
+ *     tags: [Etudiants]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Fees recalculated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Recalcul terminé. 150 étudiants mis à jour, 0 erreurs."
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     updatedCount:
+ *                       type: number
+ *                       example: 150
+ *                     errorCount:
+ *                       type: number
+ *                       example: 0
+ *                     totalStudents:
+ *                       type: number
+ *                       example: 150
+ *                     fraisGlobaux:
+ *                       type: number
+ *                       example: 60800
+ *                     academicYear:
+ *                       type: string
+ *                       example: "2024-2025"
+ *       403:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.post('/recalculate-fees', etudiantController.recalculateFees.bind(etudiantController));
 
 /**
  * @swagger

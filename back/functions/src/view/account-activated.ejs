@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compte Activé - YNOV Campus</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2c5aa0;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #2c5aa0;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .content {
+            margin-bottom: 30px;
+        }
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+        .message {
+            font-size: 16px;
+            margin-bottom: 20px;
+            line-height: 1.8;
+        }
+        .highlight {
+            background-color: #e8f4fd;
+            padding: 15px;
+            border-left: 4px solid #2c5aa0;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #2c5aa0;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .button:hover {
+            background-color: #1e3d6f;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #666;
+            font-size: 14px;
+        }
+        .info-box {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border: 1px solid #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">YNOV Campus</div>
+            <div style="color: #666;">Gestion Scolaire</div>
+        </div>
+        
+        <h1 class="title">🎉 Votre compte a été activé !</h1>
+        
+        <div class="content">
+            <div class="greeting">
+                Bonjour <%= prenom %> <%= nom %>,
+            </div>
+            
+            <div class="message">
+                Excellente nouvelle ! Votre compte sur la plateforme YNOV Campus a été activé avec succès par un administrateur.
+            </div>
+            
+            <div class="highlight">
+                <strong>Votre rôle :</strong> <%= role.charAt(0).toUpperCase() + role.slice(1) %><br>
+                <strong>Email :</strong> <%= email %><br>
+                <strong>Date d'activation :</strong> <%= new Date().toLocaleDateString('fr-FR', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) %>
+            </div>
+            
+            <div class="message">
+                Vous pouvez maintenant vous connecter à votre compte et accéder à toutes les fonctionnalités de la plateforme.
+            </div>
+            
+            <div class="info-box">
+                <strong>📋 Prochaines étapes :</strong>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>Connectez-vous avec vos identifiants</li>
+                    <li>Explorez votre tableau de bord</li>
+                    <li>Consultez vos informations personnelles</li>
+                    <% if (role === 'etudiant') { %>
+                    <li>Accédez à vos paiements et factures</li>
+                    <% } %>
+                </ul>
+            </div>
+            
+            <div style="text-align: center;">
+                <a href="<%= loginUrl %>" class="button">Se connecter maintenant</a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Si vous avez des questions, n'hésitez pas à contacter notre équipe d'administration.</p>
+            <p><strong>YNOV Campus</strong> - Gestion Scolaire</p>
+            <p style="font-size: 12px; color: #999;">
+                Cet email a été envoyé automatiquement. Merci de ne pas y répondre.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

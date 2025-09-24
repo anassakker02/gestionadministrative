@@ -1,4 +1,3 @@
-// const Facture = require('../../../classes/Facture'); // eslint-disable-line no-unused-vars
 const db = require("../../../config/firebase");
 const AuditLog = require("../../../classes/AuditLog");
 const { sendWebhook } = require("../../../utils/webhookSender");
@@ -6,6 +5,7 @@ const { sendWebhook } = require("../../../utils/webhookSender");
 class FactureController {
   constructor() {
     this.collection = db.collection("factures");
+    this.paymentPlansCollection = db.collection("payment_plans");
   }
 
   // Méthode utilitaire pour nettoyer les valeurs undefined pour Firestore
@@ -29,7 +29,6 @@ class FactureController {
       const {
         student_id,
         date_emission,
-        montant_total,
         statut,
         numero_facture,
         pdf_url,
@@ -44,38 +43,100 @@ class FactureController {
         reason,
         parentId,
         currency,
+        paymentPlanId,
+        date_echeance, // Explicitly receive date_echeance if provided
       } = req.body;
 
-      if (
-        !student_id ||
-        !montant_total ||
-        !statut ||
-        !items ||
-        items.length === 0
-      ) {
+      if (!student_id || !statut || !items || items.length === 0) {
         return res.status(400).json({
           status: false,
-          message:
-            "L'étudiant, le montant total, le statut et les articles sont requis",
+          message: "L'étudiant, le statut et les articles sont requis",
         });
       }
 
-      if (typeof montant_total !== "number" || montant_total <= 0) {
-        return res.status(400).json({
-          status: false,
-          message: "Le montant total doit être un nombre positif",
-        });
+      const etudiantDoc = await db
+        .collection("etudiants")
+        .doc(student_id)
+        .get();
+      if (!etudiantDoc.exists) {
+        return res
+          .status(404)
+          .json({ status: false, message: "Étudiant non trouvé" });
+      }
+      const etudiantData = etudiantDoc.data();
+
+      const anneeScolaireCurrent = new Date().getFullYear().toString();
+      let totalTarif = 0;
+      let tuitionAmount = 0;
+      let otherFeesAmount = 0;
+
+      try {
+        const classId = etudiantData?.classe_id;
+        if (classId) {
+          const tuitionSnap = await db
+            .collection("tarifs")
+            .where("classe_id", "==", classId)
+            .where("annee_scolaire", "==", anneeScolaireCurrent)
+            .where("type", "==", "Scolarité")
+            .where("isActive", "==", true)
+            .limit(1)
+            .get();
+          if (!tuitionSnap.empty)
+            tuitionAmount = Number(tuitionSnap.docs[0].data().montant) || 0;
+
+          const otherSnap = await db
+            .collection("tarifs")
+            .where("classe_id", "==", classId)
+            .where("annee_scolaire", "==", anneeScolaireCurrent)
+            .where("type", "==", "Autres frais")
+            .where("isActive", "==", true)
+            .limit(1)
+            .get();
+          if (!otherSnap.empty)
+            otherFeesAmount = Number(otherSnap.docs[0].data().montant) || 0;
+        }
+      } catch (e) {
+        console.warn("Tarifs lookup (create facture) failed:", e?.message);
       }
 
-      // Création de la facture (sans undefined)
+      if (!tuitionAmount) tuitionAmount = 56000;
+      if (!otherFeesAmount) otherFeesAmount = 800;
+
+      try {
+        const bourseId = etudiantData?.bourse_id;
+        if (bourseId) {
+          const bourseDoc = await db.collection("bourses").doc(bourseId).get();
+          if (bourseDoc.exists) {
+            const pr = Number(bourseDoc.data()?.pourcentage_remise) || 0;
+            if (pr > 0) {
+              tuitionAmount = Math.max(0, tuitionAmount * (1 - pr / 100));
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("Bourse lookup (create facture) failed:", e?.message);
+      }
+
+      totalTarif = Number(tuitionAmount) + Number(otherFeesAmount);
+
+      const itemsClean = Array.isArray(items) ? items : [];
+      const somme =
+        itemsClean.reduce(
+          (acc, it) => acc + Number(it.total || it.montant || 0),
+          0
+        ) || totalTarif;
       const newFacture = {
         student_id,
         date_emission: date_emission || new Date(),
-        montant_total,
-        montantPaye: 0, // Initialiser à 0 pour une nouvelle facture
-        montantRestant: montant_total, // Initialiser au montant total
+        montant_total: totalTarif,
+        montantPaye: 0,
+        montantRestant: totalTarif,
+        montant_du: totalTarif,
+        montant_payee: 0,
+        montant_restant: totalTarif,
+        somme,
         statut,
-        items: Array.isArray(items) ? items : [],
+        items: itemsClean,
         createdAt: new Date(),
       };
       if (typeof numero_facture !== "undefined")
@@ -96,10 +157,40 @@ class FactureController {
       if (typeof parentId !== "undefined") newFacture.parentId = parentId;
       if (typeof currency !== "undefined") newFacture.currency = currency;
 
+      // Handle paymentPlanId and calculate date_echeance
+      if (paymentPlanId) {
+        newFacture.paymentPlanId = paymentPlanId;
+        let dueDate = null;
+        // If date_echeance is provided directly, use it.
+        if (date_echeance) {
+          dueDate = new Date(date_echeance);
+          if (isNaN(dueDate.getTime())) dueDate = null;
+        } else {
+          // If no specific due date, try to calculate from payment plan
+          const planDoc = await this.paymentPlansCollection.doc(paymentPlanId).get();
+          if (planDoc.exists) {
+            const paymentPlanData = planDoc.data();
+            // For simplicity, let's assume the first installment's due date is used for the invoice
+            // Or, for a full annual invoice, the last installment's due date.
+            // For now, we'll take the latest installment due date as the invoice due date.
+            if (Array.isArray(paymentPlanData.installments) && paymentPlanData.installments.length > 0) {
+              const latestInstallment = paymentPlanData.installments.reduce((latest, current) => {
+                return (current.dueDateOffsetMonths > latest.dueDateOffsetMonths) ? current : latest;
+              });
+              const emissionDate = new Date(newFacture.date_emission);
+              dueDate = new Date(emissionDate);
+              dueDate.setMonth(emissionDate.getMonth() + latestInstallment.dueDateOffsetMonths);
+            }
+          }
+        }
+        if (dueDate) {
+          newFacture.date_echeance = dueDate.toISOString();
+        }
+      }
+
       const docRef = await db.collection("factures").add(newFacture);
       const createdFacture = await docRef.get();
 
-      // Audit log
       const auditLog = new AuditLog({
         userId: req.user?.id || "system",
         action: "CREATE_FACTURE",
@@ -109,7 +200,6 @@ class FactureController {
       });
       await auditLog.save();
 
-      // Send webhook notification
       await sendWebhook("invoice.created", {
         invoiceId: createdFacture.id,
         ...createdFacture.data(),
@@ -132,7 +222,7 @@ class FactureController {
   // Générer une facture pour un étudiant en utilisant les tarifs (si disponibles)
   async generateForStudent(req, res) {
     try {
-      const { student_id, items, description, currency } = req.body;
+      const { student_id, description, currency, installmentIndex } = req.body;
       if (!student_id) {
         return res
           .status(400)
@@ -155,55 +245,135 @@ class FactureController {
           .json({ status: false, message: "Étudiant / user non trouvé" });
       }
 
-      // calculer montant_total: si items fournis, use items total; sinon try tarifs by classe
-      let montant_total = 0;
-      const invoiceItems = Array.isArray(items) && items.length ? items : [];
-      if (invoiceItems.length > 0) {
-        montant_total = invoiceItems.reduce(
-          (acc, it) => acc + (Number(it.total) || 0),
-          0
-        );
-      } else if (studentData.classe_id) {
-        // chercher un tarif pour cette classe
-        const tarifsSnap = await db
-          .collection("tarifs")
-          .where("classe_id", "==", studentData.classe_id)
-          .limit(1)
-          .get();
-        if (!tarifsSnap.empty) {
-          const tarif = tarifsSnap.docs[0].data();
-          montant_total = Number(tarif.montant) || 0;
-          // create a default item
-          invoiceItems.push({
-            description: tarif.description || "Frais scolarité",
-            quantity: 1,
-            unitPrice: montant_total,
-            total: montant_total,
-          });
+      let totalTarif = 0;
+      let factureItems = [];
+      const anneeScolaireCurrent = new Date().getFullYear().toString();
+
+      let tuitionAmount = 0;
+      let otherFeesAmount = 0;
+
+      try {
+        const classId = studentData?.classe_id;
+        if (classId) {
+          const tuitionSnap = await db
+            .collection("tarifs")
+            .where("classe_id", "==", classId)
+            .where("annee_scolaire", "==", anneeScolaireCurrent)
+            .where("type", "==", "Scolarité")
+            .where("isActive", "==", true)
+            .limit(1)
+            .get();
+          if (!tuitionSnap.empty)
+            tuitionAmount = Number(tuitionSnap.docs[0].data().montant) || 0;
+
+          const otherSnap = await db
+            .collection("tarifs")
+            .where("classe_id", "==", classId)
+            .where("annee_scolaire", "==", anneeScolaireCurrent)
+            .where("type", "==", "Autres frais")
+            .where("isActive", "==", true)
+            .limit(1)
+            .get();
+          if (!otherSnap.empty)
+            otherFeesAmount = Number(otherSnap.docs[0].data().montant) || 0;
         }
+      } catch (e) {
+        console.warn("Tarifs lookup (generateForStudent) failed:", e?.message);
       }
 
-      // Fallback minimal invoice
-      if (montant_total === 0) montant_total = 0;
+      if (!tuitionAmount) tuitionAmount = 56000;
+      if (!otherFeesAmount) otherFeesAmount = 800;
+
+      try {
+        const bourseId = studentData?.bourse_id;
+        if (bourseId) {
+          const bourseDoc = await db.collection("bourses").doc(bourseId).get();
+          if (bourseDoc.exists) {
+            const pr = Number(bourseDoc.data()?.pourcentage_remise) || 0;
+            if (pr > 0) {
+              tuitionAmount = Math.max(0, tuitionAmount * (1 - pr / 100));
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("Bourse lookup (generateForStudent) failed:", e?.message);
+      }
+
+      totalTarif = Number(tuitionAmount) + Number(otherFeesAmount);
+
+      factureItems = [
+        {
+          description: `Scolarité${
+            studentData?.bourse_id ? " (bourse appliquée)" : ""
+          }`,
+          quantity: 1,
+          unitPrice: Number(tuitionAmount),
+          total: Number(tuitionAmount),
+        },
+        {
+          description: "Autres frais",
+          quantity: 1,
+          unitPrice: Number(otherFeesAmount),
+          total: Number(otherFeesAmount),
+        },
+      ];
+
+      let currentInstallmentAmount = totalTarif;
+      let currentInstallmentDescription = description || "Frais de scolarité annuel";
+      let dueDate = null;
+      let paymentPlanId = studentData.paymentPlanId || null;
+
+      if (paymentPlanId && typeof installmentIndex === 'number') {
+        const planDoc = await this.paymentPlansCollection.doc(paymentPlanId).get();
+        if (planDoc.exists) {
+          const paymentPlanData = planDoc.data();
+          if (Array.isArray(paymentPlanData.installments) && paymentPlanData.installments[installmentIndex]) {
+            const installment = paymentPlanData.installments[installmentIndex];
+            currentInstallmentAmount = totalTarif * (installment.percentage / 100);
+            currentInstallmentDescription = installment.description || currentInstallmentDescription;
+
+            const academicYearStart = new Date(`${anneeScolaireCurrent}-10-01`); // Assuming academic year starts in October
+            dueDate = new Date(academicYearStart);
+            dueDate.setMonth(academicYearStart.getMonth() + installment.dueDateOffsetMonths);
+
+            // Adjust factureItems to reflect only this installment's amount
+            factureItems = [{
+              description: currentInstallmentDescription,
+              quantity: 1,
+              unitPrice: currentInstallmentAmount,
+              total: currentInstallmentAmount,
+            }];
+          }
+        }
+      }
 
       const numero = `GEN-${student_id.slice(0, 6)}-${Date.now()
         .toString()
         .slice(-4)}`;
+      const sommeItems =
+        factureItems.reduce((acc, it) => acc + Number(it.total || 0), 0) ||
+        currentInstallmentAmount;
       const newFacture = {
         etudiant_id: student_id,
         student_id: student_id,
         parent_id: studentData.parentId || studentData.parent_id || null,
         date_emission: new Date(),
-        montant_total,
+        date_echeance: dueDate ? dueDate.toISOString() : null,
+        montant_total: currentInstallmentAmount, // Total for this specific installment/invoice
         montantPaye: 0,
-        montantRestant: montant_total,
-        statut: montant_total > 0 ? "impayée" : "nulle",
+        montantRestant: currentInstallmentAmount,
+        montant_du: currentInstallmentAmount,
+        montant_payee: 0,
+        montant_restant: currentInstallmentAmount,
+        somme: sommeItems,
+        statut: currentInstallmentAmount > 0 ? "impayée" : "nulle",
         numero,
         numero_facture: numero,
-        items: invoiceItems,
+        items: factureItems,
         currency: currency || "MAD",
-        anneeScolaire: new Date().getFullYear().toString(),
+        anneeScolaire: anneeScolaireCurrent,
         description: description || undefined,
+        paymentPlanId: paymentPlanId,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -337,6 +507,8 @@ class FactureController {
         reason,
         parentId,
         currency,
+        paymentPlanId,
+        date_echeance,
       } = req.body;
 
       if (!id) {
@@ -361,6 +533,12 @@ class FactureController {
       if (montant_total !== undefined)
         updateData.montant_total = Number(montant_total);
       if (statut !== undefined) updateData.statut = statut;
+      if (req.body.montant_du !== undefined)
+        updateData.montant_du = Number(req.body.montant_du);
+      if (req.body.montant_payee !== undefined)
+        updateData.montant_payee = Number(req.body.montant_payee);
+      if (req.body.montant_restant !== undefined)
+        updateData.montant_restant = Number(req.body.montant_restant);
       if (numero_facture !== undefined)
         updateData.numero_facture = numero_facture;
       if (pdf_url !== undefined) updateData.pdf_url = pdf_url;
@@ -371,13 +549,31 @@ class FactureController {
       if (legalMentions !== undefined) updateData.legalMentions = legalMentions;
       if (termsAndConditions !== undefined)
         updateData.termsAndConditions = termsAndConditions;
-      if (items !== undefined)
+      if (items !== undefined) {
         updateData.items = Array.isArray(items) ? items : [];
+        updateData.somme = (updateData.items || []).reduce(
+          (acc, it) => acc + Number(it.total || it.montant || 0),
+          0
+        );
+      }
+      if (req.body.somme !== undefined)
+        updateData.somme = Number(req.body.somme);
       if (originalFactureId !== undefined)
         updateData.originalFactureId = originalFactureId;
       if (reason !== undefined) updateData.reason = reason;
       if (parentId !== undefined) updateData.parentId = parentId;
       if (currency !== undefined) updateData.currency = currency;
+      if (paymentPlanId !== undefined) updateData.paymentPlanId = paymentPlanId;
+      if (date_echeance !== undefined) {
+        const dueDate = new Date(date_echeance);
+        if (isNaN(dueDate.getTime())) {
+          return res.status(400).json({
+            status: false,
+            message: "Format de date d'échéance invalide."
+          });
+        }
+        updateData.date_echeance = dueDate.toISOString();
+      }
 
       await factureRef.update(updateData);
       const updatedFacture = await factureRef.get();
@@ -833,9 +1029,40 @@ class FactureController {
         return null;
       };
 
-      const fmt = (n, c) => `${Number(n || 0).toLocaleString()} ${c || "MAD"}`;
+      // Formatage FR pour respecter l'affichage souhaité (12 000, 22/09/2025)
+      const fmt = (n, c) =>
+        `${Number(n || 0).toLocaleString("fr-FR")} ${c || "MAD"}`;
       const dateEmission = toDateSafe(factureData.date_emission);
       const currency = factureData.currency || "MAD";
+
+      // Helper pour récupérer le nom d'utilisateur par ID
+      const getUserNameById = async (userId) => {
+        if (!userId) return "N/A";
+        try {
+          const userDoc = await db.collection("users").doc(userId).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data();
+            return (
+              `${userData.prenom || ""} ${userData.nom || ""}`.trim() || userId
+            );
+          }
+        } catch (error) {
+          console.error("Error fetching user name by ID:", userId, error);
+        }
+        return userId; // Fallback to ID if name cannot be fetched
+      };
+
+      // Récupérer le nom de l'utilisateur qui a enregistré le paiement
+      let enregistreParName = "N/A";
+      if (factureData.paiement_info?.enregistre_par) {
+        enregistreParName = await getUserNameById(
+          factureData.paiement_info.enregistre_par
+        );
+      }
+
+      // Récupérer le nom de l'utilisateur actuel (qui imprime)
+      const currentUserId = req.user?.id || "system";
+      const printedByName = await getUserNameById(currentUserId);
 
       // Préparer historiques de paiements (deux schémas possibles)
       const paymentHistory = Array.isArray(factureData.paymentHistory)
@@ -884,9 +1111,9 @@ class FactureController {
                 (ph) => `
               <tr>
                 <td>${ph.methode || "—"}</td>
-                <td>${(
-                  toDateSafe(ph.date) || new Date()
-                ).toLocaleDateString()}</td>
+                <td>${(toDateSafe(ph.date) || new Date()).toLocaleDateString(
+                  "fr-FR"
+                )}</td>
                 <td>${ph.enregistre_par || "—"}</td>
                 <td class="num">${fmt(ph.montant, currency)}</td>
               </tr>`
@@ -898,23 +1125,34 @@ class FactureController {
 
       const paiementInfoSection = paiementInfo
         ? `
-        <h2>Informations de paiement</h2>
+        <h2>Détails du paiement</h2>
         <div class="grid">
-          <div><strong>Mode:</strong> ${
+          <div><strong>Montant payé:</strong> ${fmt(
+            paiementInfo.montant_paye,
+            currency
+          )}</div>
+          <div><strong>Type de paiement:</strong> ${
             paiementInfo.mode_paiement || paiementInfo.methode || "—"
           }</div>
-          <div><strong>Référence:</strong> ${
-            paiementInfo.payment_id || paiementInfo.reference_externe || "—"
-          }</div>
-          <div><strong>Qui a payé:</strong> ${
-            paiementInfo.qui_a_paye || "—"
-          }</div>
-          <div><strong>Enregistré par:</strong> ${
-            paiementInfo.enregistre_par || "—"
+          <div><strong>Statut du paiement:</strong> ${
+            paiementInfo.statut || "enregistré"
           }</div>
           <div><strong>Date:</strong> ${(
             toDateSafe(paiementInfo.date_paiement) || new Date()
-          ).toLocaleDateString()}</div>
+          ).toLocaleDateString("fr-FR")}</div>
+          <div><strong>Total des paiements effectués:</strong> ${fmt(
+            factureData.montantPaye,
+            currency
+          )}</div>
+          <div><strong>Reste global:</strong> ${fmt(
+            factureData.montantRestant,
+            currency
+          )}</div>
+          <div><strong>Enregistré par:</strong> ${enregistreParName}</div>
+          <div><strong>Imprimé par:</strong> ${printedByName}</div>
+          <div><strong>Référence:</strong> ${
+            paiementInfo.payment_id || paiementInfo.reference_externe || "—"
+          }</div>
         </div>`
         : "";
 
@@ -922,8 +1160,9 @@ class FactureController {
         <html>
           <head>
             <meta charset="utf-8"/>
+            <title>Facture ${factureData.numero_facture || id}</title>
             <style>
-              body { font-family: Arial, sans-serif; font-size: 12px; }
+              body { font-family: Arial, sans-serif; font-size: 12px; padding: 16px; }
               .header { display:flex; justify-content: space-between; align-items:center; }
               .muted { color:#666; }
               .grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px; }
@@ -949,7 +1188,7 @@ class FactureController {
               dateEmission || new Date()
             ).toLocaleDateString()}</div>
             <div class="section">
-              <h2>Détails</h2>
+              <h2>Détails de la facture</h2>
               <table class="table">
                 <thead>
                   <tr>
@@ -964,15 +1203,15 @@ class FactureController {
                 </tbody>
               </table>
               <div class="total-box">
-                <div><strong>Montant total:</strong> ${fmt(
+                <div><strong>Montant total (Année):</strong> ${fmt(
                   factureData.montant_total,
                   currency
                 )}</div>
-                <div><strong>Payé:</strong> ${fmt(
+                <div><strong>Payé (Année):</strong> ${fmt(
                   factureData.montantPaye,
                   currency
                 )}</div>
-                <div><strong>Restant:</strong> ${fmt(
+                <div><strong>Restant (Année):</strong> ${fmt(
                   factureData.montantRestant,
                   currency
                 )}</div>
@@ -1010,7 +1249,7 @@ class FactureController {
 
         // Record export history
         const exportHistory = new (require("../../../classes/ExportHistory"))({
-          userId: req.user?.id || "system",
+          userId: currentUserId,
           exportType: "pdf",
           fileName: fileName,
           filePath: filePath,
@@ -1059,6 +1298,7 @@ class FactureController {
     }
   }
 
+  // Peut être appelé via route Express (avec res) ou en interne (sans res).
   async generateAfterPayment(req, res) {
     try {
       const {
@@ -1070,7 +1310,6 @@ class FactureController {
         qui_a_paye, // Nom de la personne qui a payé (étudiant, parent, etc.)
         enregistre_par, // ID de l'utilisateur qui a enregistré le paiement (admin/sous-admin/comptable)
         reference_externe, // Référence externe (ex: transaction PayPal ID)
-        tarif_items, // Array des items de tarification
       } = req.body;
 
       if (
@@ -1080,11 +1319,15 @@ class FactureController {
         !qui_a_paye ||
         !enregistre_par
       ) {
-        return res.status(400).json({
+        const errObj = {
           status: false,
           message:
             "Étudiant, montant payé, mode de paiement, qui a payé et enregistré par sont requis",
-        });
+        };
+        if (res && typeof res.status === "function") {
+          return res.status(400).json(errObj);
+        }
+        return errObj;
       }
 
       // Récupérer les informations de l'étudiant
@@ -1099,41 +1342,124 @@ class FactureController {
       }
       const etudiantData = etudiantDoc.data();
 
-      // Récupérer les tarifs de l'étudiant
+      // Récupérer les tarifs de l'étudiant (logique alignée avec PaiementController.create)
       let totalTarif = 0;
       let factureItems = [];
+      const anneeScolaireCurrent = new Date().getFullYear().toString();
 
-      if (tarif_items && tarif_items.length > 0) {
-        factureItems = tarif_items;
-        totalTarif = tarif_items.reduce((sum, item) => sum + item.total, 0);
-      } else {
-        // Récupérer automatiquement les tarifs selon la classe et nationalité
-        const tarifsSnapshot = await db
-          .collection("tarifs")
-          .where("classe_id", "==", etudiantData.classe_id)
-          .where("nationalite", "==", etudiantData.nationalite)
-          .where("isActive", "==", true)
-          .get();
-
-        if (!tarifsSnapshot.empty) {
-          tarifsSnapshot.docs.forEach((doc) => {
-            const tarifData = doc.data();
-            totalTarif += tarifData.montant;
-            factureItems.push({
-              description: `Frais de scolarité - ${tarifData.type}`,
-              quantity: 1,
-              unitPrice: tarifData.montant,
-              total: tarifData.montant,
-              tarif_id: doc.id,
-            });
-          });
+      // Toujours calculer le CAP annuel (Scolarité + Autres frais) avec bourse
+      let tuitionAmount = 0;
+      let otherFeesAmount = 0;
+      try {
+        const classId = etudiantData?.classe_id;
+        if (classId) {
+          // Scolarité
+          const tuitionSnap = await db
+            .collection("tarifs")
+            .where("classe_id", "==", classId)
+            .where("annee_scolaire", "==", anneeScolaireCurrent)
+            .where("type", "==", "Scolarité")
+            .where("isActive", "==", true)
+            .limit(1)
+            .get();
+          if (!tuitionSnap.empty)
+            tuitionAmount = Number(tuitionSnap.docs[0].data().montant) || 0;
+          // Autres frais
+          const otherSnap = await db
+            .collection("tarifs")
+            .where("classe_id", "==", classId)
+            .where("annee_scolaire", "==", anneeScolaireCurrent)
+            .where("type", "==", "Autres frais")
+            .where("isActive", "==", true)
+            .limit(1)
+            .get();
+          if (!otherSnap.empty)
+            otherFeesAmount = Number(otherSnap.docs[0].data().montant) || 0;
         }
+      } catch (e) {
+        console.warn(
+          "Tarifs lookup (generateAfterPayment) failed:",
+          e?.message
+        );
+      }
+      if (!tuitionAmount) tuitionAmount = 56000;
+      if (!otherFeesAmount) otherFeesAmount = 800;
+      // Appliquer bourse éventuelle (pourcentage_remise sur la scolarité)
+      try {
+        const bourseId = etudiantData?.bourse_id;
+        if (bourseId) {
+          const bourseDoc = await db.collection("bourses").doc(bourseId).get();
+          if (bourseDoc.exists) {
+            const pr = Number(bourseDoc.data()?.pourcentage_remise) || 0;
+            if (pr > 0) {
+              tuitionAmount = Math.max(0, tuitionAmount * (1 - pr / 100));
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(
+          "Bourse lookup (generateAfterPayment) failed:",
+          e?.message
+        );
       }
 
-      // Calculer le montant restant
-      const montantRestant = Math.max(0, totalTarif - montant_paye);
+      totalTarif = Number(tuitionAmount) + Number(otherFeesAmount);
+      // Construire des items explicites (sans intégrer le paiement comme item)
+      factureItems = [
+        {
+          description: `Scolarité${
+            etudiantData?.bourse_id ? " (bourse appliquée)" : ""
+          }`,
+          quantity: 1,
+          unitPrice: Number(tuitionAmount),
+          total: Number(tuitionAmount),
+        },
+        {
+          description: "Autres frais",
+          quantity: 1,
+          unitPrice: Number(otherFeesAmount),
+          total: Number(otherFeesAmount),
+        },
+      ];
 
-      // Déterminer le statut de la facture
+      // Calculer le payé cumulé de l'année (avant et après ce paiement)
+      let previousPaid = 0;
+      try {
+        const paymentsSnap = await db
+          .collection("paiements")
+          .where("etudiant_id", "==", student_id)
+          .get();
+        paymentsSnap.docs.forEach((d) => {
+          const p = d.data() || {};
+          let inYear = false;
+          if (p.annee_scolaire) {
+            inYear = String(p.annee_scolaire) === anneeScolaireCurrent;
+          } else if (p.createdAt) {
+            const c = p.createdAt;
+            let dt = null;
+            if (c && typeof c.toDate === "function") dt = c.toDate();
+            else if (c && (c.seconds || c._seconds))
+              dt = new Date((c.seconds || c._seconds) * 1000);
+            else dt = new Date(c);
+            if (dt && !isNaN(dt.getTime()))
+              inYear = String(dt.getFullYear()) === anneeScolaireCurrent;
+          } else {
+            inYear = true; // fallback
+          }
+          if (inYear)
+            previousPaid += Number(p.montantPaye || p.montant_payee || 0);
+        });
+      } catch (e) {
+        console.warn(
+          "Somme paiements (generateAfterPayment) failed:",
+          e?.message
+        );
+      }
+      // Cumul après ce paiement: inclut le montant courant explicitement pour éviter le cas où la requête n'a pas encore indexé ce paiement
+      const cumuleApres = Number(previousPaid) + Number(montant_paye || 0);
+      const montantRestant = Math.max(0, Number(totalTarif) - cumuleApres);
+
+      // Déterminer le statut de la facture (pour cette facture de paiement)
       let statut;
       if (montant_paye >= totalTarif) {
         statut = "payée";
@@ -1143,48 +1469,137 @@ class FactureController {
         statut = "impayée";
       }
 
-      // Créer la facture
+      // Créer une nouvelle facture pour ce paiement
+      const sommeItems =
+        factureItems.reduce((acc, it) => acc + Number(it.total || 0), 0) ||
+        totalTarif;
       const newFacture = {
         student_id,
         parent_id: parent_id || etudiantData.parent_id || null,
         date_emission: new Date(),
-        montant_total: totalTarif,
-        montantPaye: montant_paye,
-        montantRestant,
-        statut,
-        numero_facture: `AUTO-${Date.now()}`,
+        montant_total: totalTarif, // Montant total de l'année (fixe)
+        montantPaye: cumuleApres, // Payé cumulé pour l'année (mis à jour)
+        montantRestant: montantRestant, // Restant cumulé pour l'année (mis à jour)
+        montant_du: totalTarif,
+        montant_payee: Number(montant_paye),
+        montant_restant: montantRestant,
+        somme: sommeItems,
+        statut: statut, // Statut global
+        numero_facture: `PAY-${Date.now()}`,
         pdf_url: null,
         items: factureItems,
         currency: "MAD",
-
-        // Informations de traçabilité du paiement
+        anneeScolaire: anneeScolaireCurrent,
         paiement_info: {
           mode_paiement,
           payment_id,
           qui_a_paye,
           enregistre_par,
           reference_externe: reference_externe || null,
+          montant_paye: Number(montant_paye), // C'est le montant du paiement actuel
+          cumul_avant: Number(previousPaid), // Cumul avant ce paiement (pour l'année)
+          cumul_apres: Number(cumuleApres), // Cumul après ce paiement (pour l'année)
           date_paiement: new Date(),
           auto_generated: true,
         },
-
+        historique_paiements: [
+          {
+            mode_paiement,
+            date_paiement: new Date(),
+            enregistre_par,
+            montant: Number(montant_paye),
+            reference_externe: reference_externe || null,
+          },
+        ],
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
-      // Nettoyer les valeurs undefined pour Firestore
       const cleanFacture = this.cleanUndefinedValues(newFacture);
 
-      // Sauvegarder la facture
       const docRef = await this.collection.add(cleanFacture);
       const createdFacture = await docRef.get();
 
-      // Audit log
+      // Mettre à jour le statut de paiement global de l'étudiant
+      // (totalMontantDu, totalPaid, remainingAmount, paymentWarningStatus)
+      const etudiantRef = db.collection("etudiants").doc(student_id);
+      const currentEtudiantData = etudiantDoc.data();
+
+      // Récupérer le montant total dû annuel (plafond) pour l'étudiant
+      const classeId = currentEtudiantData?.classe_id;
+      let totalDueAnnual = 0;
+      if (classeId) {
+        // Recalculer le montant total annuel dû pour l'étudiant (avec bourse)
+        let baseTuition = 0;
+        let baseOtherFees = 0;
+        const tarifsSnap = await db
+          .collection("tarifs")
+          .where("classe_id", "==", classeId)
+          .where("annee_scolaire", "==", anneeScolaireCurrent)
+          .where("isActive", "==", true)
+          .get();
+
+        tarifsSnap.docs.forEach((doc) => {
+          const tarif = doc.data();
+          if (tarif.type === "Scolarité")
+            baseTuition = Number(tarif.montant) || 0;
+          if (tarif.type === "Autres frais")
+            baseOtherFees = Number(tarif.montant) || 0;
+        });
+
+        // Appliquer bourse éventuelle
+        const bourseId = currentEtudiantData?.bourse_id;
+        if (bourseId) {
+          const bourseDoc = await db.collection("bourses").doc(bourseId).get();
+          if (bourseDoc.exists) {
+            const pr = Number(bourseDoc.data()?.pourcentage_remise) || 0;
+            if (pr > 0) {
+              baseTuition = Math.max(0, baseTuition * (1 - pr / 100));
+            }
+          }
+        }
+        totalDueAnnual = baseTuition + baseOtherFees;
+      }
+
+      // Mettre à jour le total payé de l'étudiant (somme de tous les paiements)
+      const allPaymentsForStudentSnap = await db
+        .collection("paiements")
+        .where("etudiant_id", "==", student_id)
+        .get();
+      let cumulativePaid = 0;
+      allPaymentsForStudentSnap.docs.forEach((doc) => {
+        const paymentData = doc.data();
+        cumulativePaid += Number(paymentData.montantPaye || 0);
+      });
+
+      const newRemainingAmount = Math.max(0, totalDueAnnual - cumulativePaid);
+
+      let paymentWarningStatus =
+        currentEtudiantData?.paymentStatus?.paymentWarningStatus || "";
+      if (newRemainingAmount <= 0) {
+        paymentWarningStatus = "Payé intégralement";
+      } else if (cumulativePaid > 0) {
+        paymentWarningStatus = "En cours";
+      } else {
+        paymentWarningStatus = "Non payé";
+      }
+
+      await etudiantRef.update({
+        paymentStatus: {
+          totalMontantDu: totalDueAnnual,
+          totalPaid: cumulativePaid,
+          remainingAmount: newRemainingAmount,
+          paymentWarningStatus: paymentWarningStatus,
+          updatedAt: new Date(),
+        },
+      });
+
+      // Audit log (adjust to use createdFactureId if new, or docRef.id if updated)
       const auditLog = new AuditLog({
         userId: enregistre_par,
         action: "GENERATE_FACTURE_AFTER_PAYMENT",
         entityType: "Facture",
-        entityId: createdFacture.id,
+        entityId: createdFacture.id, // Use the ID of the created or updated invoice
         details: {
           student_id,
           montant_paye,
@@ -1198,19 +1613,32 @@ class FactureController {
 
       // Send webhook notification
       await sendWebhook("invoice.auto_generated", {
-        invoiceId: createdFacture.id,
+        invoiceId: createdFacture.id, // Use the ID of the created or updated invoice
         ...createdFacture.data(),
         trigger: "payment_received",
       });
 
-      return res.status(201).json({
+      const ok = {
         status: true,
-        message: "Facture générée automatiquement après paiement avec succès",
+        message:
+          "Facture générée/mise à jour automatiquement après paiement avec succès",
         data: { id: createdFacture.id, ...createdFacture.data() },
-      });
+      };
+      if (res && typeof res.status === "function") {
+        return res.status(201).json(ok);
+      }
+      return ok;
     } catch (error) {
       console.error("Erreur génération automatique facture:", error);
-      return res.status(500).json({ status: false, message: "Erreur serveur" });
+      const errObj = {
+        status: false,
+        message: "Erreur serveur",
+        error: error.message,
+      };
+      if (res && typeof res.status === "function") {
+        return res.status(500).json(errObj);
+      }
+      return errObj;
     }
   }
 
@@ -1278,6 +1706,10 @@ class FactureController {
       const updatedData = {
         montantPaye: nouveauMontantPaye,
         montantRestant: nouveauMontantRestant,
+        // champs trio alignés
+        montant_du: factureData.montant_total || factureData.montant_du || 0,
+        montant_payee: nouveauMontantPaye,
+        montant_restant: nouveauMontantRestant,
         statut: nouveauStatut,
         updatedAt: new Date(),
       };

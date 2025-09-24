@@ -33,6 +33,12 @@ const { authenticate } = require("../../../middlewares/auth"); // Correctly dest
  *           type: string
  *           enum: [admin, comptable, etudiant, family]
  *           description: Role of the user (e.g., admin, etudiant, family)
+ *         telephone:
+ *           type: string
+ *           description: Phone number of the user (optional)
+ *         adresse:
+ *           type: string
+ *           description: Address of the user (optional)
  *     LoginCredentials:
  *       type: object
  *       required:

@@ -13,7 +13,7 @@ class UserController {
   // Register a new user
   async register(req, res) {
     try {
-      const { email, password, nom, prenom, role } = req.body;
+      const { email, password, nom, prenom, role, telephone, adresse } = req.body;
 
       if (!email || !password || !nom || !prenom) {
         return res
@@ -41,11 +41,13 @@ class UserController {
         password: hashedPassword,
         nom,
         prenom,
-        role: role && role.trim() ? role : null, // null par défaut, sera affecté par admin/sous-admin
+        role: role && role.trim() ? role : "user", // "user" par défaut pour les nouvelles inscriptions
         status: "pending", // En attente d'affectation de rôle
         createdAt: new Date(),
         updatedAt: new Date(),
-        isActive: true,
+        isActive: false, // Compte inactif jusqu'à validation admin
+        ...(telephone && { telephone }), // Ajouter telephone si fourni
+        ...(adresse && { adresse }), // Ajouter adresse si fourni
       };
 
       // Add user to Firestore
@@ -71,6 +73,8 @@ class UserController {
           nom,
           prenom,
           status: "pending",
+          ...(telephone && { telephone }),
+          ...(adresse && { adresse }),
         },
       });
     } catch (error) {

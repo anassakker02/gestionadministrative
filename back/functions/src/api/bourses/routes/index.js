@@ -261,6 +261,7 @@ router.get('/search', bourseController.search.bind(bourseController));
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/stats', bourseController.getStats.bind(bourseController));
+router.get('/percentages', bourseController.getPercentages.bind(bourseController));
 
 /**
  * @swagger

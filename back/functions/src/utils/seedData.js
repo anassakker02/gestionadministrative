@@ -17,6 +17,10 @@ function buildInvoiceCompatFields({
   currency = "MAD",
   extra = {},
 }) {
+  // Calcule somme des lignes si possible (fallback sur montant_total)
+  const somme = Array.isArray(items)
+    ? items.reduce((acc, it) => acc + Number(it.total || it.montant || 0), 0)
+    : Number(montant_total) || 0;
   return {
     // IDs étudiant: les deux variantes pour compat
     etudiant_id,
@@ -32,6 +36,12 @@ function buildInvoiceCompatFields({
     montant_total,
     montantPaye,
     montantRestant,
+    // Nouveaux champs trio sur facture
+    montant_du: Number(montant_total) || 0,
+    montant_payee: Number(montantPaye) || 0,
+    montant_restant: Number(montantRestant) || 0,
+    // Somme des items
+    somme,
     statut,
     items: Array.isArray(items) ? items : [],
     currency,
@@ -47,16 +57,12 @@ async function seedFirestore() {
     console.log("🚀 Début du seed Firestore...");
     const hashedPassword = await bcrypt.hash("password123", 10);
 
-    // Nettoyage collections principales
+    // Nettoyage collections principales - Version ultra simplifiée
     const collections = [
       "users",
       "etudiants",
-      "classes",
-      "factures",
-      "paiements",
-      "parents",
+      "bourses",
       "tarifs",
-      "auditLogs",
     ];
     for (const col of collections) {
       const snapshot = await db.collection(col).get();
@@ -66,75 +72,42 @@ async function seedFirestore() {
       console.log(`✅ Collection ${col} vidée`);
     }
 
-    // === ANNÉE SCOLAIRE ===
-    const anneeScolaire = "2024-2025";
+    // === VERSION ULTRA SIMPLIFIÉE ===
+    // Seulement admin et étudiants, aucune autre table
 
-    // === CLASSES === (ids stables)
-    const classes = [
-      { id: "L1-INFO", nom: "L1 Informatique", niveau: "1ère année" },
-      { id: "L2-DESIGN", nom: "L2 Design", niveau: "2ème année" },
-      { id: "L3-INFO", nom: "L3 Informatique", niveau: "3ème année" },
-      { id: "M1-MATH", nom: "M1 Mathématiques", niveau: "Master 1" },
-      { id: "M2-INFO", nom: "M2 Informatique", niveau: "Master 2" },
-    ];
-
-    const classeIdMap = {};
-    for (const cls of classes) {
-      const ref = db.collection("classes").doc(cls.id);
-      await ref.set({
-        nom: cls.nom,
-        niveau: cls.niveau,
-        anneeScolaire,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-      classeIdMap[cls.id] = ref.id;
-    }
-    console.log("✅ Classes insérées");
-
-    // === USERS === (ids stables)
+    // === USERS === (ids stables) - Version simplifiée
     const users = [
-      {
-        id: "etudiant1_user",
-        prenom: "Premier",
-        nom: "Etudiant",
-        email: "etudiant1@ecole.com",
-        role: "etudiant",
-      },
-      {
-        id: "etudiant2_user",
-        prenom: "Deuxième",
-        nom: "Etudiant",
-        email: "etudiant2@ecole.com",
-        role: "etudiant",
-      },
-      {
-        id: "etudiant3_user",
-        prenom: "Troisième",
-        nom: "Etudiant",
-        email: "etudiant3@ecole.com",
-        role: "etudiant",
-      },
-      {
-        id: "parent1_user",
-        prenom: "Ali",
-        nom: "Parent",
-        email: "parent1@gmail.com",
-        role: "parent",
-      },
-      {
-        id: "parent2_user",
-        prenom: "Sophie",
-        nom: "Parent",
-        email: "parent2@gmail.com",
-        role: "parent",
-      },
       {
         id: "admin_user",
         prenom: "Admin",
         nom: "Système",
         email: "admin@gmail.com",
         role: "admin",
+        isActive: true, // Admin actif par défaut
+      },
+      {
+        id: "omar_benali_user",
+        prenom: "Omar",
+        nom: "Benali",
+        email: "omar.benali@ecole.com",
+        role: "etudiant",
+        isActive: true, // Étudiants actifs par défaut
+      },
+      {
+        id: "fatima_zahra_user",
+        prenom: "Fatima",
+        nom: "Zahra",
+        email: "fatima.zahra@ecole.com",
+        role: "etudiant",
+        isActive: true, // Étudiants actifs par défaut
+      },
+      {
+        id: "mohamed_mellouk_user",
+        prenom: "Mohamed",
+        nom: "Mellouk",
+        email: "mohamed.mellouk@ecole.com",
+        role: "etudiant",
+        isActive: true, // Étudiants actifs par défaut
       },
     ];
 
@@ -147,100 +120,144 @@ async function seedFirestore() {
         createdAt: new Date(),
         updatedAt: new Date(),
         isActive: true,
-        status: user.role === "admin" ? "active" : "active",
+        status: "active",
       });
       userIdMap[user.id] = ref.id;
     }
     console.log("✅ Utilisateurs insérés");
 
-    // === PARENTS === (entités dédiées, référencent users)
-    const parents = [
+    // === BOURSES === (3 bourses)
+    const bourses = [
       {
-        id: "parent1",
-        user_id: userIdMap["parent1_user"],
-        nom: "Parent",
-        prenom: "Ali",
-        email: "parent1@gmail.com",
-        telephone: "0600000001",
-        adresse: "10 Rue des Parents",
-        profession: "Comptable",
-        enfants_ids: [],
+        id: "bourse_excellence",
+        nom: "Bourse d'Excellence",
+        description: "Bourse pour les étudiants avec d'excellents résultats",
+        pourcentage_remise: 50, // 50% de réduction
+        montant_remise: null,
+        isExempt: false,
+        isActive: true,
       },
       {
-        id: "parent2",
-        user_id: userIdMap["parent2_user"],
-        nom: "Parent",
-        prenom: "Sophie",
-        email: "parent2@gmail.com",
-        telephone: "0600000002",
-        adresse: "20 Avenue des Parents",
-        profession: "Ingénieure",
-        enfants_ids: [],
+        id: "bourse_sociale",
+        nom: "Bourse Sociale",
+        description: "Bourse pour les étudiants en situation difficile",
+        pourcentage_remise: null,
+        montant_remise: 10000, // 10,000 DH de réduction fixe
+        isExempt: false,
+        isActive: true,
+      },
+      {
+        id: "bourse_complete",
+        nom: "Bourse Complète",
+        description: "Exonération totale des frais",
+        pourcentage_remise: null,
+        montant_remise: null,
+        isExempt: true, // Exonération totale
+        isActive: true,
       },
     ];
 
-    const parentIdMap = {};
-    for (const p of parents) {
-      const ref = db.collection("parents").doc(p.id);
+    const bourseIdMap = {};
+    for (const bourse of bourses) {
+      const ref = db.collection("bourses").doc();
       await ref.set({
-        ...p,
+        nom: bourse.nom,
+        description: bourse.description,
+        pourcentage_remise: bourse.pourcentage_remise,
+        montant_remise: bourse.montant_remise,
+        isExempt: bourse.isExempt,
+        isActive: bourse.isActive,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      parentIdMap[p.id] = ref.id;
+      bourseIdMap[bourse.id] = ref.id; // Garder la correspondance pour les étudiants
     }
-    console.log("✅ Parents insérés");
+    console.log("✅ Bourses insérées");
 
-    // === ETUDIANTS === (ids stables + champs normalisés)
-    const etudiants = [
+    // === TARIFS === (2 tarifs : frais scolarité et frais inscription)
+    const currentYear = new Date().getFullYear();
+    const academicYear = `${currentYear}-${currentYear + 1}`;
+    
+    const tarifs = [
       {
-        id: "etudiant1",
-        user_id: userIdMap["etudiant1_user"],
-        nom: "Etudiant",
-        prenom: "Premier",
-        email: "etudiant1@ecole.com",
-        telephone: "0612345678",
-        adresse: "123 Rue de la Paix",
-        date_naissance: new Date("2005-01-15"),
-        classe_id: classeIdMap["L1-INFO"],
-        nationalite: "Marocaine",
-        bourse_id: null,
-        parentId: userIdMap["parent1_user"], // on stocke l'id user du parent pour compat
-        numero_etudiant: "E2024001",
+        id: "tarif_frais_scolarite",
+        nom: "Frais scolaire",
+        type: "Scolarité",
+        montant: 59590,
+        annee_scolaire: academicYear,
+        nationalite: "Marocain",
+        isActive: true,
       },
       {
-        id: "etudiant2",
-        user_id: userIdMap["etudiant2_user"],
-        nom: "Etudiant",
-        prenom: "Deuxième",
-        email: "etudiant2@ecole.com",
-        telephone: "0687654321",
-        adresse: "456 Avenue des Champs",
-        date_naissance: new Date("2004-05-10"),
-        classe_id: classeIdMap["M1-MATH"],
-        nationalite: "Française",
-        bourse_id: null,
-        parentId: userIdMap["parent2_user"],
-        numero_etudiant: "E2024002",
-      },
-      {
-        id: "etudiant3",
-        user_id: userIdMap["etudiant3_user"],
-        nom: "Etudiant",
-        prenom: "Troisième",
-        email: "etudiant3@ecole.com",
-        telephone: "0611223344",
-        adresse: "789 Boulevard de la Liberté",
-        date_naissance: new Date("2006-02-28"),
-        classe_id: classeIdMap["L2-DESIGN"],
-        nationalite: "Allemande",
-        bourse_id: null,
-        parentId: null,
-        numero_etudiant: "E2024003",
+        id: "tarif_frais_inscription",
+        nom: "Frais Inscription",
+        type: "Scolarité",
+        montant: 800,
+        annee_scolaire: academicYear,
+        nationalite: "Marocain",
+        isActive: true,
       },
     ];
 
-    const etudiantIdMap = {};
+    for (const tarif of tarifs) {
+      const ref = db.collection("tarifs").doc(tarif.id);
+      await ref.set({
+        ...tarif,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    console.log("✅ Tarifs insérés");
+
+    // === ETUDIANTS === (version ultra simplifiée - 3 étudiants basiques)
+    const etudiants = [
+      {
+        id: "std-omar-benali",
+        user_id: userIdMap["omar_benali_user"],
+        nom: "Benali",
+        prenom: "Omar",
+        email: "omar.benali@example.com",
+        telephone: "+212610000001",
+        adresse: "123 Rue de la Paix, Casablanca",
+        date_naissance: new Date("2005-09-15"),
+        nationalite: "Marocaine",
+        code_massar: "2024001",
+        classe_id: null, // Pas de classe assignée pour l'instant
+        bourse_id: bourseIdMap["bourse_excellence"], // Bourse d'excellence (50% de réduction)
+        frais_payment: 30195, // 60390 * 0.5 = 30195 DH
+      },
+      {
+        id: "std-fatima-zahra",
+        user_id: userIdMap["fatima_zahra_user"],
+        nom: "Zahra",
+        prenom: "Fatima",
+        email: "fatima.zahra@example.com",
+        telephone: "+212610000002",
+        adresse: "456 Avenue Royale, Rabat",
+        date_naissance: new Date("2004-03-20"),
+        nationalite: "Marocaine",
+        code_massar: "2024002",
+        classe_id: null, // Pas de classe assignée pour l'instant
+        bourse_id: bourseIdMap["bourse_sociale"], // Bourse sociale (10,000 DH de réduction)
+        frais_payment: 50390, // 60390 - 10000 = 50390 DH
+      },
+      {
+        id: "std-mohamed-mellouk",
+        user_id: userIdMap["mohamed_mellouk_user"],
+        nom: "Mellouk",
+        prenom: "Mohamed",
+        email: "mohamed.mellouk@example.com",
+        telephone: "+212610000004",
+        adresse: "101 Avenue Mohammed V, Marrakech",
+        date_naissance: new Date("2005-07-22"),
+        nationalite: "Marocaine",
+        code_massar: "2024004",
+        classe_id: null, // Pas de classe assignée pour l'instant
+        bourse_id: bourseIdMap["bourse_complete"], // Bourse complète (exonération totale)
+        frais_payment: 0, // Exonération totale
+      },
+    ];
+
     for (const etu of etudiants) {
       const ref = db.collection("etudiants").doc(etu.id);
       await ref.set({
@@ -248,251 +265,15 @@ async function seedFirestore() {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      etudiantIdMap[etu.id] = ref.id;
     }
-    // renseigner enfants_ids côté parents
-    await db
-      .collection("parents")
-      .doc("parent1")
-      .update({
-        enfants_ids: [etudiantIdMap["etudiant1"]],
-        updatedAt: new Date(),
-      });
-    await db
-      .collection("parents")
-      .doc("parent2")
-      .update({
-        enfants_ids: [etudiantIdMap["etudiant2"]],
-        updatedAt: new Date(),
-      });
-    console.log("✅ Etudiants insérés");
-
-    // === TARIFS === (par classe: Scolarité=56000, Autres frais=800)
-    const tarifsToInsert = [];
-    const baseTuition = 56000;
-    const otherFees = 800;
-    for (const cls of classes) {
-      const cid = classeIdMap[cls.id];
-      tarifsToInsert.push(
-        {
-          classe_id: cid,
-          montant: baseTuition,
-          annee_scolaire: anneeScolaire,
-          nationalite: "Toutes",
-          bourse_id: null,
-          reductions: [],
-          type: "Scolarité",
-          isActive: true,
-          endDate: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          classe_id: cid,
-          montant: otherFees,
-          annee_scolaire: anneeScolaire,
-          nationalite: "Toutes",
-          bourse_id: null,
-          reductions: [],
-          type: "Autres frais",
-          isActive: true,
-          endDate: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }
-      );
-    }
-    for (const t of tarifsToInsert) {
-      await db.collection("tarifs").add(t);
-    }
-    console.log("✅ Tarifs (56k + 800) insérés pour chaque classe");
-
-    // === FACTURES === (compat champs)
-    const facturesData = [
-      {
-        forcedId: undefined,
-        numero: "INV-2024-001",
-        etudiant_id: etudiantIdMap["etudiant1"],
-        parent_user_id: userIdMap["parent1_user"],
-        montant_total: 50000,
-        montantPaye: 50000,
-        montantRestant: 0,
-        statut: "payée",
-        date_emission: new Date(),
-        items: [
-          {
-            description: "Frais de scolarité",
-            quantity: 1,
-            unitPrice: 50000,
-            total: 50000,
-          },
-        ],
-      },
-      {
-        forcedId: "HYwiaE7GlkxUfGnQbv6i",
-        numero: "INV-2024-002",
-        etudiant_id: etudiantIdMap["etudiant2"],
-        parent_user_id: userIdMap["parent2_user"],
-        montant_total: 20000,
-        montantPaye: 20000,
-        montantRestant: 0,
-        statut: "payée",
-        date_emission: new Date(),
-        items: [
-          {
-            description: "Règlement partiel 1",
-            quantity: 1,
-            unitPrice: 20000,
-            total: 20000,
-          },
-        ],
-      },
-      {
-        forcedId: "OFM7Iu2DsMd6BpotTVi3",
-        numero: "INV-2024-003",
-        etudiant_id: etudiantIdMap["etudiant2"],
-        parent_user_id: userIdMap["parent2_user"],
-        montant_total: 22000,
-        montantPaye: 22000,
-        montantRestant: 0,
-        statut: "payée",
-        date_emission: new Date(),
-        items: [
-          {
-            description: "Règlement partiel 2",
-            quantity: 1,
-            unitPrice: 22000,
-            total: 22000,
-          },
-        ],
-      },
-      {
-        forcedId: "41L2zIFDKwPUekEoxgeU",
-        numero: "INV-2024-004",
-        etudiant_id: etudiantIdMap["etudiant2"],
-        parent_user_id: userIdMap["parent2_user"],
-        montant_total: 50000,
-        montantPaye: 50000,
-        montantRestant: 0,
-        statut: "payée",
-        date_emission: new Date(),
-        items: [
-          {
-            description: "Règlement partiel 3",
-            quantity: 1,
-            unitPrice: 50000,
-            total: 50000,
-          },
-        ],
-      },
-      {
-        forcedId: undefined,
-        numero: "INV-2024-005",
-        etudiant_id: etudiantIdMap["etudiant3"],
-        parent_user_id: null,
-        montant_total: 48000,
-        montantPaye: 20000,
-        montantRestant: 28000,
-        statut: "partielle",
-        date_emission: new Date(),
-        items: [
-          {
-            description: "Frais scolaires",
-            quantity: 1,
-            unitPrice: 48000,
-            total: 48000,
-          },
-        ],
-      },
-    ];
-
-    const factureIdByNumero = {};
-    for (const f of facturesData) {
-      const docRef = f.forcedId
-        ? db.collection("factures").doc(f.forcedId)
-        : db.collection("factures").doc();
-      const payload = buildInvoiceCompatFields({
-        etudiant_id: f.etudiant_id,
-        parent_user_id: f.parent_user_id,
-        numero: f.numero,
-        date_emission: f.date_emission,
-        montant_total: f.montant_total,
-        montantPaye: f.montantPaye,
-        montantRestant: f.montantRestant,
-        statut: f.statut,
-        items: f.items,
-        anneeScolaire,
-      });
-      await docRef.set({ id: docRef.id, ...payload });
-      factureIdByNumero[f.numero] = docRef.id;
-    }
-    console.log("✅ Factures insérées");
-
-    // === PAIEMENTS === (compat champs: etudiant_id, facture_ids, methode)
-    const paiements = [
-      {
-        etudiant_id: etudiantIdMap["etudiant1"],
-        facture_ids: [factureIdByNumero["INV-2024-001"]],
-        montantPaye: 50000,
-        methode: "Virement",
-        mode: "Virement", // compat UI éventuelle
-        justificatif_url: null,
-        qui_a_paye: userIdMap["parent1_user"],
-        enregistre_par: userIdMap["admin_user"],
-      },
-      {
-        etudiant_id: etudiantIdMap["etudiant2"],
-        facture_ids: [factureIdByNumero["INV-2024-002"]],
-        montantPaye: 20000,
-        methode: "Espèces",
-        mode: "Espèces",
-        justificatif_url: null,
-        qui_a_paye: userIdMap["parent2_user"],
-        enregistre_par: userIdMap["admin_user"],
-      },
-      {
-        etudiant_id: etudiantIdMap["etudiant2"],
-        facture_ids: [factureIdByNumero["INV-2024-003"]],
-        montantPaye: 22000,
-        methode: "Chèque",
-        mode: "Chèque",
-        justificatif_url: null,
-        qui_a_paye: userIdMap["parent2_user"],
-        enregistre_par: userIdMap["admin_user"],
-      },
-      {
-        etudiant_id: etudiantIdMap["etudiant2"],
-        facture_ids: [factureIdByNumero["INV-2024-004"]],
-        montantPaye: 50000,
-        methode: "Virement",
-        mode: "Virement",
-        justificatif_url: null,
-        qui_a_paye: userIdMap["parent2_user"],
-        enregistre_par: userIdMap["admin_user"],
-      },
-      {
-        etudiant_id: etudiantIdMap["etudiant3"],
-        facture_ids: [factureIdByNumero["INV-2024-005"]],
-        montantPaye: 20000,
-        methode: "Espèces",
-        mode: "Espèces",
-        justificatif_url: null,
-        qui_a_paye: etudiantIdMap["etudiant3"],
-        enregistre_par: userIdMap["admin_user"],
-      },
-    ];
-
-    for (const paiement of paiements) {
-      await db.collection("paiements").add({
-        ...paiement,
-        status: "enregistré",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    }
-    console.log("✅ Paiements insérés");
+    console.log("✅ Etudiants insérés avec bourses et frais_payment");
 
     console.log("🎉 Seed Firestore terminé avec succès !");
+    console.log("📊 Données créées :");
+    console.log("   - 4 utilisateurs (1 admin + 3 étudiants)");
+    console.log("   - 3 bourses (Excellence, Sociale, Complète)");
+    console.log("   - 2 tarifs (Frais scolaire: 59,590 DH, Frais Inscription: 800 DH)");
+    console.log("   - 3 étudiants avec bourses et frais_payment calculés");
   } catch (err) {
     console.error("❌ Erreur seed:", err);
     throw err;

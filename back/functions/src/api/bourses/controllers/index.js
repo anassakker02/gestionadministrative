@@ -12,21 +12,29 @@ class BourseController {
    */
   async create(req, res) {
     try {
-      const { nom, pourcentage_remise } = req.body;
+      const { nom, pourcentage_remise, description, criteres, status, montant_remise, isExempt } = req.body;
 
       // Validation des données
-      if (!nom || !pourcentage_remise) {
+      if (!nom) {
         return res.status(400).json({
           status: false,
-          message: 'Le nom et le pourcentage de remise sont requis',
+          message: 'Le nom est requis',
         });
       }
 
-      // Validation du pourcentage (doit être entre 0 et 100)
-      if (pourcentage_remise < 0 || pourcentage_remise > 100) {
+      // Validation du pourcentage (doit être entre 0 et 100) si fourni
+      if (pourcentage_remise !== undefined && (pourcentage_remise < 0 || pourcentage_remise > 100)) {
         return res.status(400).json({
           status: false,
           message: 'Le pourcentage de remise doit être entre 0 et 100',
+        });
+      }
+
+      // Validation du montant de remise (doit être positif) si fourni
+      if (montant_remise !== undefined && montant_remise < 0) {
+        return res.status(400).json({
+          status: false,
+          message: 'Le montant de remise doit être positif',
         });
       }
 
@@ -45,7 +53,13 @@ class BourseController {
       // Créer la nouvelle bourse
       const bourseData = {
         nom: nom.trim(),
-        pourcentage_remise: Number(pourcentage_remise),
+        description: description || null,
+        criteres: criteres || null,
+        status: status || 'active',
+        pourcentage_remise: pourcentage_remise !== undefined ? Number(pourcentage_remise) : null,
+        montant_remise: montant_remise !== undefined ? Number(montant_remise) : null,
+        isExempt: isExempt || false,
+        isActive: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -173,7 +187,7 @@ class BourseController {
   async update(req, res) {
     try {
       const { id } = req.params;
-      const { nom, pourcentage_remise } = req.body;
+      const { nom, pourcentage_remise, description, criteres, status, montant_remise, isExempt } = req.body;
 
       if (!id) {
         return res.status(400).json({
@@ -208,6 +222,13 @@ class BourseController {
         });
       }
 
+      if (montant_remise !== undefined && montant_remise < 0) {
+        return res.status(400).json({
+          status: false,
+          message: 'Le montant de remise doit être positif',
+        });
+      }
+
       // Vérifier si le nouveau nom n'existe pas déjà (sauf pour la bourse actuelle)
       if (nom && nom.trim() !== bourseDoc.data().nom) {
         const existingBourse = await this.collection
@@ -231,8 +252,28 @@ class BourseController {
         updateData.nom = nom.trim();
       }
 
+      if (description !== undefined) {
+        updateData.description = description;
+      }
+
+      if (criteres !== undefined) {
+        updateData.criteres = criteres;
+      }
+
+      if (status !== undefined) {
+        updateData.status = status;
+      }
+
       if (pourcentage_remise !== undefined) {
         updateData.pourcentage_remise = Number(pourcentage_remise);
+      }
+
+      if (montant_remise !== undefined) {
+        updateData.montant_remise = Number(montant_remise);
+      }
+
+      if (isExempt !== undefined) {
+        updateData.isExempt = isExempt;
       }
 
       // Mettre à jour la bourse
@@ -385,6 +426,30 @@ class BourseController {
       return res.status(500).json({
         status: false,
         message: 'Erreur lors de la récupération des statistiques',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Obtenir les pourcentages de réduction disponibles
+   * GET /bourses/percentages
+   */
+  async getPercentages(req, res) {
+    try {
+      // Pourcentages prédéfinis disponibles
+      const availablePercentages = [25, 50, 60];
+      
+      return res.status(200).json({
+        status: true,
+        data: availablePercentages,
+        message: 'Pourcentages de réduction disponibles récupérés avec succès',
+      });
+    } catch (error) {
+      console.error('Erreur lors de la récupération des pourcentages:', error);
+      return res.status(500).json({
+        status: false,
+        message: 'Erreur lors de la récupération des pourcentages',
         error: error.message,
       });
     }

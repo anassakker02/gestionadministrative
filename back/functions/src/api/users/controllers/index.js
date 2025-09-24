@@ -48,7 +48,7 @@ class UsersController {
       // Vérifier que l'utilisateur connecté peut affecter des rôles
       if (
         !req.user ||
-        (req.user.role !== "admin" && req.user.role !== "sub-admin")
+        !["admin", "comptable"].includes(req.user.role)
       ) {
         return res.status(403).json({
           message: "Non autorisé à voir les utilisateurs en attente",
@@ -56,24 +56,14 @@ class UsersController {
         });
       }
 
-      // Chercher les utilisateurs sans rôle (role: null) ou avec status: "pending"
-      const snapshotNoRole = await this.collection
-        .where("role", "==", null)
+      // Chercher les utilisateurs avec role: "user" et isActive: false
+      const snapshot = await this.collection
+        .where("role", "==", "user")
+        .where("isActive", "==", false)
         .orderBy("createdAt", "desc")
         .get();
 
-      const snapshotPending = await this.collection
-        .where("status", "==", "pending")
-        .orderBy("createdAt", "desc")
-        .get();
-
-      // Combiner les résultats et éviter les doublons
-      const allPendingDocs = [...snapshotNoRole.docs];
-      snapshotPending.docs.forEach((doc) => {
-        if (!allPendingDocs.find((existing) => existing.id === doc.id)) {
-          allPendingDocs.push(doc);
-        }
-      });
+      const allPendingDocs = snapshot.docs;
 
       const pendingUsers = allPendingDocs.map((doc) => {
         const userData = doc.data();
@@ -154,7 +144,29 @@ class UsersController {
       const { id } = req.params;
       if (!id)
         return res.status(400).json({ status: false, message: "ID requis" });
-      const userDoc = await this.collection.doc(id).get();
+      let userDoc = await this.collection.doc(id).get();
+
+      // Fallback: si l'ID fourni correspond potentiellement à un étudiant, résoudre vers son user_id
+      if (!userDoc.exists) {
+        try {
+          const etuDoc = await db.collection("etudiants").doc(id).get();
+          if (etuDoc.exists) {
+            const etuData = etuDoc.data() || {};
+            const linkedUserId = etuData.user_id || etuData.userId;
+            if (linkedUserId) {
+              const maybeUserDoc = await this.collection
+                .doc(linkedUserId)
+                .get();
+              if (maybeUserDoc.exists) {
+                userDoc = maybeUserDoc;
+              }
+            }
+          }
+        } catch (fallbackErr) {
+          // Ne pas interrompre, on renverra 404 si rien trouvé
+        }
+      }
+
       if (!userDoc.exists)
         return res
           .status(404)
@@ -563,6 +575,135 @@ class UsersController {
       return res
         .status(500)
         .json({ message: "Erreur lors de l'envoi de l'email", status: false });
+    }
+  }
+
+  // Approuver un utilisateur (changer le rôle et activer le compte)
+  async approveUser(req, res) {
+    try {
+      const { id } = req.params;
+      const { role = "etudiant" } = req.body;
+
+      // Vérifier que l'utilisateur connecté peut approuver
+      if (
+        !req.user ||
+        !["admin", "comptable"].includes(req.user.role)
+      ) {
+        return res.status(403).json({
+          status: false,
+          message: "Accès refusé. Seuls les administrateurs peuvent approuver les utilisateurs.",
+        });
+      }
+
+      const userRef = this.collection.doc(id);
+      const userDoc = await userRef.get();
+
+      if (!userDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: "Utilisateur non trouvé",
+        });
+      }
+
+      const userData = userDoc.data();
+      if (userData.role !== "user" || userData.isActive !== false) {
+        return res.status(400).json({
+          status: false,
+          message: "Cet utilisateur n'est pas en attente d'approbation",
+        });
+      }
+
+      // Mettre à jour l'utilisateur
+      await userRef.update({
+        role: role,
+        isActive: true,
+        approvedBy: req.user.id,
+        approvedAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      // Envoyer un email de confirmation d'activation
+      try {
+        const loginUrl = process.env.FRONTEND_URL || "http://localhost:8080/login";
+        await sendEmail({
+          to: userData.email,
+          subject: "🎉 Votre compte YNOV Campus a été activé !",
+          template: "account-activated",
+          context: {
+            prenom: userData.prenom,
+            nom: userData.nom,
+            email: userData.email,
+            role: role,
+            loginUrl: loginUrl
+          }
+        });
+        console.log(`Email d'activation envoyé à ${userData.email}`);
+      } catch (emailError) {
+        console.error("Erreur lors de l'envoi de l'email d'activation:", emailError);
+        // Ne pas faire échouer la requête si l'email échoue
+      }
+
+      return res.status(200).json({
+        status: true,
+        message: "Utilisateur approuvé avec succès et email d'activation envoyé",
+        data: { id, role, isActive: true },
+      });
+    } catch (error) {
+      return res.status(500).json({
+        status: false,
+        message: "Erreur lors de l'approbation de l'utilisateur",
+        error: error.message,
+      });
+    }
+  }
+
+  // Rejeter un utilisateur (supprimer le compte)
+  async rejectUser(req, res) {
+    try {
+      const { id } = req.params;
+
+      // Vérifier que l'utilisateur connecté peut rejeter
+      if (
+        !req.user ||
+        !["admin", "comptable"].includes(req.user.role)
+      ) {
+        return res.status(403).json({
+          status: false,
+          message: "Accès refusé. Seuls les administrateurs peuvent rejeter les utilisateurs.",
+        });
+      }
+
+      const userRef = this.collection.doc(id);
+      const userDoc = await userRef.get();
+
+      if (!userDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: "Utilisateur non trouvé",
+        });
+      }
+
+      const userData = userDoc.data();
+      if (userData.role !== "user" || userData.isActive !== false) {
+        return res.status(400).json({
+          status: false,
+          message: "Cet utilisateur n'est pas en attente d'approbation",
+        });
+      }
+
+      // Supprimer l'utilisateur
+      await userRef.delete();
+
+      return res.status(200).json({
+        status: true,
+        message: "Utilisateur rejeté avec succès",
+      });
+    } catch (error) {
+      return res.status(500).json({
+        status: false,
+        message: "Erreur lors du rejet de l'utilisateur",
+        error: error.message,
+      });
     }
   }
 }

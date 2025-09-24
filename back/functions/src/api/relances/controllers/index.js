@@ -10,7 +10,7 @@ class RelanceController {
   // Créer une relance
   async create(req, res) {
     try {
-      const { facture_id, dateEnvoi, type, statutEnvoi, efficacite, dateReponse } = req.body;
+      const { facture_id, dateEnvoi, type, statutEnvoi, efficacite, dateReponse, periodeCible, montantPeriodeDu, messageContent } = req.body;
 
       if (!facture_id || !dateEnvoi || !type) {
         return res.status(400).json({
@@ -26,6 +26,9 @@ class RelanceController {
         statutEnvoi: statutEnvoi || 'en attente',
         efficacite: efficacite || 'pending',
         dateReponse: dateReponse ? new Date(dateReponse) : null,
+        periodeCible: periodeCible || null, // Store target period
+        montantPeriodeDu: montantPeriodeDu || null, // Store amount due for the period
+        messageContent: messageContent || null, // Store message content
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -110,7 +113,7 @@ class RelanceController {
   async update(req, res) {
     try {
       const { id } = req.params;
-      const { facture_id, dateEnvoi, type, statutEnvoi, efficacite, dateReponse } = req.body;
+      const { facture_id, dateEnvoi, type, statutEnvoi, efficacite, dateReponse, periodeCible, montantPeriodeDu, messageContent } = req.body;
 
       if (!id)
         return res
@@ -133,6 +136,9 @@ class RelanceController {
       if (statutEnvoi !== undefined) updateData.statutEnvoi = statutEnvoi;
       if (efficacite !== undefined) updateData.efficacite = efficacite;
       if (dateReponse !== undefined) updateData.dateReponse = dateReponse ? new Date(dateReponse) : null;
+      if (periodeCible !== undefined) updateData.periodeCible = periodeCible;
+      if (montantPeriodeDu !== undefined) updateData.montantPeriodeDu = montantPeriodeDu;
+      if (messageContent !== undefined) updateData.messageContent = messageContent;
 
       await relanceRef.update(updateData);
       const updatedRelance = await relanceRef.get();
@@ -202,6 +208,125 @@ class RelanceController {
     } catch (error) {
       console.error("Error updating reminder effectiveness:", error);
       return res.status(500).json({ status: false, message: "Erreur lors de la mise à jour de l'efficacité de la relance." });
+    }
+  }
+
+  async sendEmailReminder(req, res) {
+    try {
+      const { relanceId, to, subject, message } = req.body;
+
+      if (!relanceId || !to || !subject || !message) {
+        return res.status(400).json({
+          status: false,
+          message: 'Les champs relanceId, to, subject et message sont requis.',
+        });
+      }
+
+      const relanceRef = this.collection.doc(relanceId);
+      const relanceDoc = await relanceRef.get();
+      if (!relanceDoc.exists) {
+        return res.status(404).json({ status: false, message: 'Relance non trouvée.' });
+      }
+
+      const oldRelanceData = relanceDoc.data();
+
+      // Assume sendEmail function is available via module.exports from utils/sendmail.js
+      const sendEmail = require('../../../utils/sendmail');
+
+      await sendEmail({
+        to,
+        subject,
+        template: 'genericEmailTemplate', // You might want a specific template for reminders
+        context: { messageContent: message }, // Pass message content to template
+      });
+
+      const updateData = {
+        statusRelance: 'envoye',
+        dateEnvoi: new Date().toISOString(),
+        messageContent: message, // Store the email message content
+        updatedAt: new Date(),
+      };
+      await relanceRef.update(updateData);
+      const updatedRelance = await relanceRef.get();
+
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'SEND_EMAIL_REMINDER',
+        entityType: 'Relance',
+        entityId: relanceId,
+        details: { oldData: oldRelanceData, newData: updatedRelance.data(), emailSentTo: to, emailSubject: subject },
+      });
+      await auditLog.save();
+
+      return res.status(200).json({
+        status: true,
+        message: 'Email de relance envoyé avec succès.',
+        data: { id: updatedRelance.id, ...updatedRelance.data() },
+      });
+
+    } catch (error) {
+      console.error("Erreur lors de l'envoi de l'email de relance:", error);
+      return res.status(500).json({
+        status: false,
+        message: 'Erreur lors de l\'envoi de l\'email de relance.',
+        error: error.message,
+      });
+    }
+  }
+
+  async sendMessageReminder(req, res) {
+    try {
+      const { relanceId, message } = req.body;
+
+      if (!relanceId || !message) {
+        return res.status(400).json({
+          status: false,
+          message: 'Les champs relanceId et message sont requis.',
+        });
+      }
+
+      const relanceRef = this.collection.doc(relanceId);
+      const relanceDoc = await relanceRef.get();
+      if (!relanceDoc.exists) {
+        return res.status(404).json({ status: false, message: 'Relance non trouvée.' });
+      }
+
+      const oldRelanceData = relanceDoc.data();
+
+      // Here you would typically integrate with an SMS gateway or other messaging service.
+      // For now, we'll just store the message content in the relance document.
+
+      const updateData = {
+        type: 'SMS', // Assuming 'SMS' for message reminders
+        statutEnvoi: 'envoye',
+        dateEnvoi: new Date().toISOString(),
+        messageContent: message, // Store the message content
+        updatedAt: new Date(),
+      };
+      await relanceRef.update(updateData);
+      const updatedRelance = await relanceRef.get();
+
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'SEND_MESSAGE_REMINDER',
+        entityType: 'Relance',
+        entityId: relanceId,
+        details: { oldData: oldRelanceData, newData: updatedRelance.data(), messageSent: message },
+      });
+      await auditLog.save();
+
+      return res.status(200).json({
+        status: true,
+        message: 'Message de relance envoyé avec succès.',
+        data: { id: updatedRelance.id, ...updatedRelance.data() },
+      });
+    } catch (error) {
+      console.error("Erreur lors de l\'envoi du message de relance:", error);
+      return res.status(500).json({
+        status: false,
+        message: 'Erreur lors de l\'envoi du message de relance.',
+        error: error.message,
+      });
     }
   }
 
