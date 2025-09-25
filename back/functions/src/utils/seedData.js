@@ -56,6 +56,10 @@ async function seedFirestore() {
   try {
     console.log("🚀 Début du seed Firestore...");
     const hashedPassword = await bcrypt.hash("password123", 10);
+    
+    // Define academic year at the beginning
+    const currentYear = new Date().getFullYear();
+    const academicYear = `${currentYear}-${currentYear + 1}`;
 
     // Nettoyage collections principales - Version ultra simplifiée
     const collections = [
@@ -90,7 +94,7 @@ async function seedFirestore() {
         id: "omar_benali_user",
         prenom: "Omar",
         nom: "Benali",
-        email: "omar.benali@ecole.com",
+        email: "omar.benali@example.com",
         role: "etudiant",
         isActive: true, // Étudiants actifs par défaut
       },
@@ -98,7 +102,7 @@ async function seedFirestore() {
         id: "fatima_zahra_user",
         prenom: "Fatima",
         nom: "Zahra",
-        email: "fatima.zahra@ecole.com",
+        email: "fatima.zahra@example.com",
         role: "etudiant",
         isActive: true, // Étudiants actifs par défaut
       },
@@ -106,7 +110,7 @@ async function seedFirestore() {
         id: "mohamed_mellouk_user",
         prenom: "Mohamed",
         nom: "Mellouk",
-        email: "mohamed.mellouk@ecole.com",
+        email: "mohamed.mellouk@example.com",
         role: "etudiant",
         isActive: true, // Étudiants actifs par défaut
       },
@@ -242,9 +246,6 @@ async function seedFirestore() {
     console.log("✅ Classes insérées");
 
     // === TARIFS === (2 tarifs : frais scolarité et frais inscription)
-    const currentYear = new Date().getFullYear();
-    const academicYear = `${currentYear}-${currentYear + 1}`;
-    
     const tarifs = [
       {
         id: "tarif_frais_scolarite",

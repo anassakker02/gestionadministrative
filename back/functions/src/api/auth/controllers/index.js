@@ -552,7 +552,7 @@ class UserController {
     switch (role) {
       case "etudiant": {
         const Etudiant = require("../../../classes/Etudiant");
-        const etudiant = Etudiant.fromUser(user, additionalData);
+        const etudiant = await Etudiant.fromUser(user, additionalData);
         const docRef = await db.collection("etudiants").add(etudiant.toJSON());
         return docRef.id;
       }

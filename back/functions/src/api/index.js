@@ -57,10 +57,19 @@ app.use(bodyParser.json());
 app.use("/bourses", authenticate, authorize(["admin"]), boursesHandler);
 app.use("/classes", authenticate, authorize(["admin"]), classesHandler);
 app.use("/echeanciers", authenticate, authorize(["admin"]), echeanciersHandler);
+// Routes générales des étudiants - pour admin/sous-admin
 app.use(
   "/etudiants",
   authenticate,
   authorize(["admin", "sous-admin"]),
+  etudiantsHandler
+);
+
+// Routes du portail étudiant - accessibles aux étudiants
+app.use(
+  "/student-portal",
+  authenticate,
+  authorize(["etudiant"]),
   etudiantsHandler
 );
 app.use(

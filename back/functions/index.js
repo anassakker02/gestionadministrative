@@ -1,9 +1,9 @@
-require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const { onRequest } = require("firebase-functions/v2/https");
 const helmet = require("helmet");
+const jwt = require("jsonwebtoken");
 
 const server = express();
 server.use(express.json());
@@ -21,47 +21,102 @@ const allowedOrigins = [
   "http://127.0.0.1:5173",
 ];
 
-// CORS options: allow credentials and handle preflight globally
-const corsOptions = {
-  origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps, curl)
-    if (!origin) return callback(null, true);
-
-    // Autoriser localhost, 127.0.0.1 et IPs privées (192.168.x.x, 10.x.x.x, 172.16-31.x.x) en dev
-    const privateIpRegex =
-      /^http:\/\/(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\./;
-    if (allowedOrigins.includes(origin) || privateIpRegex.test(origin)) {
-      return callback(null, true);
+server.use(
+  cors({
+    credentials: false,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
     }
-    return callback(new Error("Not allowed by CORS"));
-  },
-  credentials: true,
-  methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-};
+  })
+);
 
-server.use(cors(corsOptions));
-// Ensure preflight requests receive proper CORS headers
-server.options("*", cors(corsOptions));
 
-// Defensive CORS headers to ensure Access-Control-Allow-Credentials is always present
-// server.use((req, res, next) => {
-//   const origin = req.headers.origin;
-//   if (origin && allowedOrigins.includes(origin)) {
-//     res.header("Access-Control-Allow-Origin", origin);
-//     res.header("Vary", "Origin");
-//     res.header("Access-Control-Allow-Credentials", "true");
-//     res.header("Access-Control-Allow-Methods", "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS");
-//     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-//     if (req.method === "OPTIONS") {
-//       return res.sendStatus(204);
-//     }
-//   }
-//   next();
-// });
 
-// ROUTES
-const api = require("./src/api");
-server.use("/v1", api);
+// ✅ JWT authentication middleware pour l'application de gestion scolaire
+function authMiddleware(req, res, next) {
+  // Routes publiques (pas d'authentification requise)
+  const publicRoutes = [
+    "/v1/auth/login",
+    "/v1/auth/register", 
+    "/v1/auth/forgot-password",
+    "/v1/auth/reset-password",
+    "/v1/auth/refresh-token"
+  ];
 
+  // Si c'est une route publique, passer directement
+  if (publicRoutes.includes(req.originalUrl)) {
+    return next();
+  }
+
+  // ✅ Require JWT pour toutes les autres routes
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({ 
+      status: false, 
+      message: "Accès refusé. Aucun token fourni." 
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    if (err.name === "TokenExpiredError") {
+      return res.status(401).json({ 
+        status: false, 
+        message: "Token expiré.",
+        code: "TOKEN_EXPIRED"
+      });
+    }
+    return res.status(403).json({ 
+      status: false, 
+      message: "Token invalide.",
+      code: "INVALID_TOKEN"
+    });
+  }
+}
+
+
+// ✅ Routes (protected with JWT) - Lazy loading pour éviter les timeouts
+let apiRouter;
+let isApiLoaded = false;
+
+// Fonction pour charger les routes de manière paresseuse
+function loadApiRoutes() {
+  if (!isApiLoaded) {
+    try {
+      apiRouter = require("./src/api");
+      isApiLoaded = true;
+      console.log("✅ API routes loaded successfully");
+    } catch (error) {
+      console.error("❌ Error loading API routes:", error);
+      throw error;
+    }
+  }
+  return apiRouter;
+}
+
+// Middleware pour charger les routes à la demande
+server.use("/v1", authMiddleware, (req, res, next) => {
+  try {
+    const api = loadApiRoutes();
+    api(req, res, next);
+  } catch (error) {
+    console.error("❌ Error in API middleware:", error);
+    res.status(500).json({
+      status: false,
+      message: "Erreur interne du serveur"
+    });
+  }
+});
+
+// ✅ Export as Firebase Function
 exports.api = onRequest(server);

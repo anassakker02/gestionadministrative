@@ -1,5 +1,6 @@
 const router = require("express").Router(); // Module pour créer un nouveau route
 const usersController = require("../controllers");
+const { authenticate } = require("../../../middlewares/auth");
 
 /**
  * @swagger
@@ -214,12 +215,67 @@ const usersController = require("../controllers");
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get("/", usersController.getAll.bind(usersController));
-router.post("/", usersController.create.bind(usersController));
+router.get("/", authenticate, usersController.getAll.bind(usersController));
+router.post("/", authenticate, usersController.create.bind(usersController));
 router.get(
   "/available-for-student",
+  authenticate,
   usersController.getAvailableUsersForStudent.bind(usersController)
 );
+
+/**
+ * @swagger
+ * /users/available-classes:
+ *   get:
+ *     summary: Get available classes for student profile
+ *     tags: [Users]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Available classes retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Classes récupérées avec succès"
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       nom:
+ *                         type: string
+ *                       niveau:
+ *                         type: string
+ *                       description:
+ *                         type: string
+ *                       capacite:
+ *                         type: number
+ *                       annee_scolaire:
+ *                         type: string
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get("/available-classes", authenticate, usersController.getAvailableClasses.bind(usersController));
 
 /**
  * @swagger
@@ -348,9 +404,9 @@ router.get(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get("/:id", usersController.getById.bind(usersController));
-router.put("/:id", usersController.update.bind(usersController));
-router.delete("/:id", usersController.delete.bind(usersController));
+router.get("/:id", authenticate, usersController.getById.bind(usersController));
+router.put("/:id", authenticate, usersController.update.bind(usersController));
+router.delete("/:id", authenticate, usersController.delete.bind(usersController));
 
 /**
  * @swagger
@@ -389,6 +445,7 @@ router.delete("/:id", usersController.delete.bind(usersController));
  */
 router.patch(
   "/:id/activate",
+  authenticate,
   usersController.activateUser.bind(usersController)
 );
 
@@ -429,6 +486,7 @@ router.patch(
  */
 router.patch(
   "/:id/deactivate",
+  authenticate,
   usersController.deactivateUser.bind(usersController)
 );
 
@@ -481,6 +539,7 @@ router.patch(
  */
 router.patch(
   "/:id/preferences",
+  authenticate,
   usersController.updateNotificationPreferences.bind(usersController)
 );
 
@@ -523,7 +582,7 @@ router.patch(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get("/pending", usersController.getPendingUsers.bind(usersController));
+router.get("/pending", authenticate, usersController.getPendingUsers.bind(usersController));
 
 /**
  * @swagger
@@ -584,7 +643,7 @@ router.get("/pending", usersController.getPendingUsers.bind(usersController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put("/:id/approve", usersController.approveUser.bind(usersController));
+router.put("/:id/approve", authenticate, usersController.approveUser.bind(usersController));
 
 /**
  * @swagger
@@ -633,6 +692,74 @@ router.put("/:id/approve", usersController.approveUser.bind(usersController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete("/:id/reject", usersController.rejectUser.bind(usersController));
+router.delete("/:id/reject", authenticate, usersController.rejectUser.bind(usersController));
+
+/**
+ * @swagger
+ * /users/{id}/password:
+ *   put:
+ *     summary: Change user password
+ *     tags: [Users]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the user to change password for
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - oldPassword
+ *               - newPassword
+ *             properties:
+ *               oldPassword:
+ *                 type: string
+ *                 format: password
+ *                 description: Current password
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 6
+ *                 description: New password (minimum 6 characters)
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ *       400:
+ *         description: Invalid input or incorrect old password
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Not authorized to change this user's password
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.put("/:id/password", authenticate, usersController.changePassword.bind(usersController));
 
 module.exports = router;

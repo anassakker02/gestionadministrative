@@ -1,5 +1,9 @@
 const router = require('express').Router();
 const etudiantController = require('../controllers');
+const { authenticate } = require('../../../middlewares/auth');
+
+// Import des routes du portail étudiant
+const studentPortalRoutes = require('./studentPortal');
 
 /**
  * @swagger
@@ -294,8 +298,8 @@ const etudiantController = require('../controllers');
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/', etudiantController.create.bind(etudiantController));
-router.get('/', etudiantController.getAll.bind(etudiantController));
+router.post('/', authenticate, etudiantController.create.bind(etudiantController));
+router.get('/', authenticate, etudiantController.getAll.bind(etudiantController));
 
 /**
  * @swagger
@@ -346,7 +350,7 @@ router.get('/', etudiantController.getAll.bind(etudiantController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/search', etudiantController.search.bind(etudiantController));
+router.get('/search', authenticate, etudiantController.search.bind(etudiantController));
 
 /**
  * @swagger
@@ -379,7 +383,7 @@ router.get('/search', etudiantController.search.bind(etudiantController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/stats', etudiantController.getStats.bind(etudiantController));
+router.get('/stats', authenticate, etudiantController.getStats.bind(etudiantController));
 
 /**
  * @swagger
@@ -434,7 +438,7 @@ router.get('/stats', etudiantController.getStats.bind(etudiantController));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/recalculate-fees', etudiantController.recalculateFees.bind(etudiantController));
+router.post('/recalculate-fees', authenticate, etudiantController.recalculateFees.bind(etudiantController));
 
 /**
  * @swagger
@@ -476,7 +480,7 @@ router.post('/recalculate-fees', etudiantController.recalculateFees.bind(etudian
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/classe/:classe_id', etudiantController.getByClasse.bind(etudiantController));
+router.get('/classe/:classe_id', authenticate, etudiantController.getByClasse.bind(etudiantController));
 
 /**
  * @swagger
@@ -605,8 +609,11 @@ router.get('/classe/:classe_id', etudiantController.getByClasse.bind(etudiantCon
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:id', etudiantController.getById.bind(etudiantController));
-router.put('/:id', etudiantController.update.bind(etudiantController));
-router.delete('/:id', etudiantController.delete.bind(etudiantController));
+router.get('/:id', authenticate, etudiantController.getById.bind(etudiantController));
+router.put('/:id', authenticate, etudiantController.update.bind(etudiantController));
+router.delete('/:id', authenticate, etudiantController.delete.bind(etudiantController));
+
+// Routes du portail étudiant
+router.use('/portal', studentPortalRoutes);
 
 module.exports = router;

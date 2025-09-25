@@ -20,7 +20,10 @@ class Etudiant {
   }
 
   // Créer un étudiant à partir des données d'un utilisateur
-  static fromUser(user, additionalData = {}) {
+  static async fromUser(user, additionalData = {}) {
+    // Calculer automatiquement les frais de scolarité
+    const fraisPayment = await Etudiant.calculateScolariteFees();
+    
     return new Etudiant({
       user_id: user.id,
       nom: user.nom,
@@ -28,8 +31,63 @@ class Etudiant {
       email: user.email,
       telephone: user.telephone,
       adresse: user.adresse,
+      frais_payment: fraisPayment,
       ...additionalData,
     });
+  }
+
+  // Calculer les frais de scolarité automatiquement
+  static async calculateScolariteFees() {
+    try {
+      const admin = require('firebase-admin');
+      const db = admin.firestore();
+      
+      // Récupérer l'année scolaire actuelle
+      const currentYear = new Date().getFullYear();
+      const academicYear = `${currentYear}-${currentYear + 1}`;
+      
+      console.log(`[Etudiant] Calcul des frais pour l'année: ${academicYear}`);
+      
+      // Récupérer les frais d'inscription
+      const fraisInscriptionSnapshot = await db
+        .collection("tarifs")
+        .where("annee_scolaire", "==", academicYear)
+        .where("isActive", "==", true)
+        .where("type", "==", "Scolarité")
+        .where("nom", "==", "Frais Inscription")
+        .get();
+
+      // Récupérer les frais de scolarité
+      const fraisScolariteSnapshot = await db
+        .collection("tarifs")
+        .where("annee_scolaire", "==", academicYear)
+        .where("isActive", "==", true)
+        .where("type", "==", "Scolarité")
+        .where("nom", "==", "Frais scolaire")
+        .get();
+
+      // Calculer le total
+      let montantInscription = 0;
+      let montantScolarite = 0;
+      
+      if (!fraisInscriptionSnapshot.empty) {
+        montantInscription = fraisInscriptionSnapshot.docs[0].data().montant || 0;
+        console.log(`[Etudiant] Frais d'inscription: ${montantInscription} MAD`);
+      }
+      
+      if (!fraisScolariteSnapshot.empty) {
+        montantScolarite = fraisScolariteSnapshot.docs[0].data().montant || 0;
+        console.log(`[Etudiant] Frais de scolarité: ${montantScolarite} MAD`);
+      }
+      
+      const totalFees = montantInscription + montantScolarite;
+      console.log(`[Etudiant] Total frais_payment calculé: ${totalFees} MAD`);
+      
+      return totalFees;
+    } catch (error) {
+      console.error('[Etudiant] Erreur lors du calcul des frais:', error);
+      return 0; // Retourner 0 en cas d'erreur
+    }
   }
 
   toJSON() {

@@ -706,6 +706,121 @@ class UsersController {
       });
     }
   }
+
+  // Changer le mot de passe d'un utilisateur
+  async changePassword(req, res) {
+    try {
+      const { id } = req.params;
+      const { oldPassword, newPassword } = req.body;
+
+      // Vérifier que l'utilisateur connecté peut changer le mot de passe
+      if (!req.user || (req.user.id !== id && !["admin", "comptable"].includes(req.user.role))) {
+        return res.status(403).json({
+          status: false,
+          message: "Accès refusé. Vous ne pouvez changer que votre propre mot de passe.",
+        });
+      }
+
+      if (!oldPassword || !newPassword) {
+        return res.status(400).json({
+          status: false,
+          message: "L'ancien mot de passe et le nouveau mot de passe sont requis.",
+        });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({
+          status: false,
+          message: "Le nouveau mot de passe doit contenir au moins 6 caractères.",
+        });
+      }
+
+      // Récupérer l'utilisateur
+      const userDoc = await this.collection.doc(id).get();
+      if (!userDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: "Utilisateur non trouvé.",
+        });
+      }
+
+      const userData = userDoc.data();
+
+      // Vérifier l'ancien mot de passe
+      const bcrypt = require("bcrypt");
+      const isOldPasswordValid = await bcrypt.compare(oldPassword, userData.password);
+      if (!isOldPasswordValid) {
+        return res.status(400).json({
+          status: false,
+          message: "L'ancien mot de passe est incorrect.",
+        });
+      }
+
+      // Hasher le nouveau mot de passe
+      const saltRounds = 10;
+      const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+
+      // Mettre à jour le mot de passe
+      await this.collection.doc(id).update({
+        password: hashedNewPassword,
+        updatedAt: new Date(),
+      });
+
+      return res.status(200).json({
+        status: true,
+        message: "Mot de passe modifié avec succès.",
+      });
+    } catch (error) {
+      console.error("Error in changePassword:", error);
+      return res.status(500).json({
+        status: false,
+        message: "Erreur lors du changement de mot de passe.",
+        error: error.message,
+      });
+    }
+  }
+
+  // Récupérer les classes disponibles pour le profil étudiant
+  async getAvailableClasses(req, res) {
+    try {
+      // Vérifier que l'utilisateur est connecté
+      if (!req.user) {
+        return res.status(401).json({
+          status: false,
+          message: "Authentification requise.",
+        });
+      }
+
+      // Récupérer toutes les classes actives
+      const classesSnapshot = await db.collection("classes")
+        .where("isActive", "==", true)
+        .orderBy("niveau")
+        .orderBy("nom")
+        .get();
+
+      const classes = classesSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        nom: doc.data().nom,
+        niveau: doc.data().niveau,
+        description: doc.data().description,
+        capacite: doc.data().capacite,
+        annee_scolaire: doc.data().annee_scolaire,
+      }));
+
+      return res.status(200).json({
+        status: true,
+        message: "Classes récupérées avec succès.",
+        data: classes,
+      });
+    } catch (error) {
+      console.error("Error in getAvailableClasses:", error);
+      return res.status(500).json({
+        status: false,
+        message: "Erreur lors de la récupération des classes.",
+        error: error.message,
+      });
+    }
+  }
 }
 
 module.exports = new UsersController();
