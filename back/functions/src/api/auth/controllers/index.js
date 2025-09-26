@@ -131,6 +131,26 @@ class UserController {
           .status(401)
           .json({ message: "Email ou mot de passe incorrect", status: false });
       }
+
+      // Vérifier si le compte est actif
+      if (user.isActive === false) {
+        // Audit log for failed login attempt (inactive account)
+        const auditLog = new AuditLog({
+          userId: userDoc.id,
+          action: "USER_LOGIN_FAILURE",
+          entityType: "User",
+          entityId: userDoc.id,
+          details: { email, reason: "Account inactive", ipAddress },
+        });
+        await auditLog.save();
+        return res
+          .status(403)
+          .json({ 
+            message: "Votre compte a été désactivé. Veuillez contacter l'administrateur.", 
+            status: false,
+            code: "ACCOUNT_INACTIVE"
+          });
+      }
       // Générer un token (optionnel, ici simple exemple)
       // const token = jwt.sign({ id: userDoc.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: "1d" });
       // Pour l'exemple, on retourne juste un indicateur de succès

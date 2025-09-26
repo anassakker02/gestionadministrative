@@ -17,11 +17,48 @@ class StudentPortalController {
   async getStudentDashboard(req, res) {
     try {
       const userId = req.user.id; // ID de l'utilisateur connecté
+      const userRole = req.user.role; // Rôle de l'utilisateur connecté
       
-      // Trouver l'étudiant correspondant à cet utilisateur
-      const etudiantSnapshot = await this.etudiantsCollection
-        .where("user_id", "==", userId)
-        .get();
+      let etudiantSnapshot;
+      
+      if (userRole === "parent") {
+        // Pour un parent, trouver l'étudiant lié via etudiant_id dans le profil parent
+        const usersCollection = db.collection("users");
+        const parentDoc = await usersCollection.doc(userId).get();
+        
+        if (!parentDoc.exists) {
+          return res.status(404).json({
+            status: false,
+            message: "Parent non trouvé"
+          });
+        }
+        
+        const parentData = parentDoc.data();
+        const etudiantId = parentData.etudiant_id;
+        
+        if (!etudiantId) {
+          return res.status(404).json({
+            status: false,
+            message: "Aucun étudiant lié à ce parent"
+          });
+        }
+        
+        // Récupérer l'étudiant lié directement par son ID de document
+        const etudiantDoc = await this.etudiantsCollection.doc(etudiantId).get();
+        if (!etudiantDoc.exists) {
+          return res.status(404).json({
+            status: false,
+            message: "Étudiant lié non trouvé"
+          });
+        }
+        
+        etudiantSnapshot = { docs: [etudiantDoc] };
+      } else {
+        // Pour un étudiant, trouver l'étudiant correspondant à cet utilisateur
+        etudiantSnapshot = await this.etudiantsCollection
+          .where("user_id", "==", userId)
+          .get();
+      }
 
       if (etudiantSnapshot.empty) {
         return res.status(404).json({
@@ -204,23 +241,60 @@ class StudentPortalController {
   async getStudentPayments(req, res) {
     try {
       const userId = req.user.id;
-      console.log("🔍 getStudentPayments - User ID:", userId);
+      const userRole = req.user.role;
+      console.log("🔍 getStudentPayments - User ID:", userId, "Role:", userRole);
       
-      // Trouver l'étudiant correspondant à cet utilisateur
-      const etudiantSnapshot = await this.etudiantsCollection
-        .where("user_id", "==", userId)
-        .get();
+      let etudiantId, etudiantData;
+      
+      if (userRole === "parent") {
+        // Pour un parent, trouver l'étudiant lié
+        const usersCollection = db.collection("users");
+        const parentDoc = await usersCollection.doc(userId).get();
+        
+        if (!parentDoc.exists) {
+          return res.status(404).json({
+            status: false,
+            message: "Parent non trouvé"
+          });
+        }
+        
+        const parentData = parentDoc.data();
+        const linkedEtudiantId = parentData.etudiant_id;
+        
+        if (!linkedEtudiantId) {
+          return res.status(404).json({
+            status: false,
+            message: "Aucun étudiant lié à ce parent"
+          });
+        }
+        
+        const etudiantDoc = await this.etudiantsCollection.doc(linkedEtudiantId).get();
+        if (!etudiantDoc.exists) {
+          return res.status(404).json({
+            status: false,
+            message: "Étudiant lié non trouvé"
+          });
+        }
+        
+        etudiantId = etudiantDoc.id;
+        etudiantData = etudiantDoc.data();
+      } else {
+        // Pour un étudiant, trouver l'étudiant correspondant à cet utilisateur
+        const etudiantSnapshot = await this.etudiantsCollection
+          .where("user_id", "==", userId)
+          .get();
 
-      if (etudiantSnapshot.empty) {
-        console.log("❌ Aucun étudiant trouvé pour user_id:", userId);
-        return res.status(404).json({
-          status: false,
-          message: "Étudiant non trouvé pour cet utilisateur"
-        });
+        if (etudiantSnapshot.empty) {
+          console.log("❌ Aucun étudiant trouvé pour user_id:", userId);
+          return res.status(404).json({
+            status: false,
+            message: "Étudiant non trouvé pour cet utilisateur"
+          });
+        }
+
+        etudiantId = etudiantSnapshot.docs[0].id;
+        etudiantData = etudiantSnapshot.docs[0].data();
       }
-
-      const etudiantId = etudiantSnapshot.docs[0].id;
-      const etudiantData = etudiantSnapshot.docs[0].data();
       console.log("✅ Étudiant trouvé - ID:", etudiantId, "Nom:", etudiantData.nom, etudiantData.prenom);
 
       // Récupérer les paiements avec pagination
@@ -336,21 +410,56 @@ class StudentPortalController {
   async getStudentInvoices(req, res) {
     try {
       const userId = req.user.id;
+      const userRole = req.user.role;
       
-      // Trouver l'étudiant correspondant à cet utilisateur
-      const etudiantSnapshot = await this.etudiantsCollection
-        .where("user_id", "==", userId)
-        .get();
+      let etudiantId;
+      
+      if (userRole === "parent") {
+        // Pour un parent, trouver l'étudiant lié
+        const usersCollection = db.collection("users");
+        const parentDoc = await usersCollection.doc(userId).get();
+        
+        if (!parentDoc.exists) {
+          return res.status(404).json({
+            status: false,
+            message: "Parent non trouvé"
+          });
+        }
+        
+        const parentData = parentDoc.data();
+        const linkedEtudiantId = parentData.etudiant_id;
+        
+        if (!linkedEtudiantId) {
+          return res.status(404).json({
+            status: false,
+            message: "Aucun étudiant lié à ce parent"
+          });
+        }
+        
+        const etudiantDoc = await this.etudiantsCollection.doc(linkedEtudiantId).get();
+        if (!etudiantDoc.exists) {
+          return res.status(404).json({
+            status: false,
+            message: "Étudiant lié non trouvé"
+          });
+        }
+        
+        etudiantId = etudiantDoc.id;
+      } else {
+        // Pour un étudiant, trouver l'étudiant correspondant à cet utilisateur
+        const etudiantSnapshot = await this.etudiantsCollection
+          .where("user_id", "==", userId)
+          .get();
 
-      if (etudiantSnapshot.empty) {
-        return res.status(404).json({
-          status: false,
-          message: "Étudiant non trouvé pour cet utilisateur"
-        });
+        if (etudiantSnapshot.empty) {
+          return res.status(404).json({
+            status: false,
+            message: "Étudiant non trouvé pour cet utilisateur"
+          });
+        }
+        
+        etudiantId = etudiantSnapshot.docs[0].id;
       }
-
-      const etudiantId = etudiantSnapshot.docs[0].id;
-      const etudiantData = etudiantSnapshot.docs[0].data();
 
       // Récupérer les factures
       let facturesSnapshot = await this.facturesCollection

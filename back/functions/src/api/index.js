@@ -5,6 +5,12 @@ const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const express = require("express");
 const { authenticate, authorize } = require("../middlewares/auth");
+const { 
+  performanceMonitor, 
+  timeoutMiddleware, 
+  memoryMonitor, 
+  firestoreMonitor 
+} = require("../middlewares/performance");
 
 const boursesHandler = require("./bourses/routes");
 const classesHandler = require("./classes/routes");
@@ -54,6 +60,59 @@ app.options("*", cors(corsOptions));
 app.use(cookieParser());
 app.use(bodyParser.json());
 
+// ✅ Middlewares de performance et monitoring
+app.use(performanceMonitor);
+app.use(timeoutMiddleware(30000)); // 30 secondes max
+app.use(memoryMonitor);
+app.use(firestoreMonitor);
+
+// ✅ Endpoint de santé pour tester la connectivité (PUBLIC)
+app.get("/health", (req, res) => {
+  res.json({
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+  });
+});
+
+// ✅ Endpoint de diagnostic avancé (PUBLIC)
+app.get("/diagnostic", async (req, res) => {
+  try {
+    const { checkFirestoreHealth } = require('../utils/firestoreTimeout');
+    
+    const memUsage = process.memoryUsage();
+    const firestoreHealthy = await checkFirestoreHealth();
+    
+    res.json({
+      status: "diagnostic_complete",
+      timestamp: new Date().toISOString(),
+      system: {
+        uptime: process.uptime(),
+        memory: {
+          rss: Math.round(memUsage.rss / 1024 / 1024) + 'MB',
+          heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + 'MB',
+          heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + 'MB',
+          external: Math.round(memUsage.external / 1024 / 1024) + 'MB'
+        },
+        nodeVersion: process.version,
+        platform: process.platform
+      },
+      firestore: {
+        healthy: firestoreHealthy,
+        connection: firestoreHealthy ? 'OK' : 'ERROR'
+      },
+      warnings: []
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "diagnostic_failed",
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 app.use("/bourses", authenticate, authorize(["admin"]), boursesHandler);
 app.use("/classes", authenticate, authorize(["admin"]), classesHandler);
 app.use("/echeanciers", authenticate, authorize(["admin"]), echeanciersHandler);
@@ -65,11 +124,11 @@ app.use(
   etudiantsHandler
 );
 
-// Routes du portail étudiant - accessibles aux étudiants
+// Routes du portail étudiant - accessibles aux étudiants et parents
 app.use(
   "/student-portal",
   authenticate,
-  authorize(["etudiant"]),
+  authorize(["etudiant", "parent"]),
   etudiantsHandler
 );
 app.use(

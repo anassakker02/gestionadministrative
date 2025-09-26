@@ -41,6 +41,7 @@ class Etudiant {
     try {
       const admin = require('firebase-admin');
       const db = admin.firestore();
+      const { withRetryAndTimeout } = require('../utils/firestoreTimeout');
       
       // Récupérer l'année scolaire actuelle
       const currentYear = new Date().getFullYear();
@@ -48,23 +49,29 @@ class Etudiant {
       
       console.log(`[Etudiant] Calcul des frais pour l'année: ${academicYear}`);
       
-      // Récupérer les frais d'inscription
-      const fraisInscriptionSnapshot = await db
-        .collection("tarifs")
-        .where("annee_scolaire", "==", academicYear)
-        .where("isActive", "==", true)
-        .where("type", "==", "Scolarité")
-        .where("nom", "==", "Frais Inscription")
-        .get();
+      // Récupérer les frais d'inscription avec timeout et retry
+      const fraisInscriptionSnapshot = await withRetryAndTimeout(
+        () => db
+          .collection("tarifs")
+          .where("annee_scolaire", "==", academicYear)
+          .where("isActive", "==", true)
+          .where("type", "==", "Scolarité")
+          .where("nom", "==", "Frais Inscription")
+          .get(),
+        { timeoutMs: 8000, maxRetries: 2 }
+      );
 
-      // Récupérer les frais de scolarité
-      const fraisScolariteSnapshot = await db
-        .collection("tarifs")
-        .where("annee_scolaire", "==", academicYear)
-        .where("isActive", "==", true)
-        .where("type", "==", "Scolarité")
-        .where("nom", "==", "Frais scolaire")
-        .get();
+      // Récupérer les frais de scolarité avec timeout et retry
+      const fraisScolariteSnapshot = await withRetryAndTimeout(
+        () => db
+          .collection("tarifs")
+          .where("annee_scolaire", "==", academicYear)
+          .where("isActive", "==", true)
+          .where("type", "==", "Scolarité")
+          .where("nom", "==", "Frais scolaire")
+          .get(),
+        { timeoutMs: 8000, maxRetries: 2 }
+      );
 
       // Calculer le total
       let montantInscription = 0;

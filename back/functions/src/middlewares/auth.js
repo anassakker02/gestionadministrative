@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const db = require("../config/firebase");
 
-const authenticate = (req, res, next) => {
+const authenticate = async (req, res, next) => {
   const authHeader = req.header("Authorization");
   console.log("[AUTH MIDDLEWARE] Authorization header:", authHeader);
   const token = authHeader?.replace("Bearer ", "");
@@ -22,6 +22,32 @@ const authenticate = (req, res, next) => {
     );
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log("[AUTH MIDDLEWARE] Token verified, payload:", decoded);
+    
+    // Vérifier le statut actif de l'utilisateur
+    const userDoc = await db.collection("users").doc(decoded.id).get();
+    if (!userDoc.exists) {
+      console.warn("[AUTH MIDDLEWARE] User not found in database:", decoded.id);
+      return res
+        .status(401)
+        .json({ 
+          status: false, 
+          message: "Utilisateur introuvable.", 
+          code: "USER_NOT_FOUND" 
+        });
+    }
+    
+    const userData = userDoc.data();
+    if (userData.isActive === false) {
+      console.warn("[AUTH MIDDLEWARE] User account is inactive:", decoded.id);
+      return res
+        .status(403)
+        .json({ 
+          status: false, 
+          message: "Votre compte a été désactivé. Veuillez contacter l'administrateur.", 
+          code: "ACCOUNT_INACTIVE" 
+        });
+    }
+    
     req.user = decoded; // Attach user payload to the request object
     next();
   } catch (error) {
