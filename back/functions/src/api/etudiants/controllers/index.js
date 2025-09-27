@@ -944,6 +944,250 @@ class EtudiantController {
   }
 
   /**
+   * Lier un parent à un étudiant
+   * POST /etudiants/:id/link-parent
+   */
+  async linkParent(req, res) {
+    try {
+      const { id } = req.params;
+      const { parentId } = req.body;
+
+      if (!parentId) {
+        return res.status(400).json({
+          status: false,
+          message: "ID du parent requis"
+        });
+      }
+
+      // Vérifier que l'étudiant existe
+      const etudiantDoc = await this.collection.doc(id).get();
+      if (!etudiantDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: "Étudiant non trouvé"
+        });
+      }
+
+      // Vérifier que le parent existe
+      const parentDoc = await db.collection("parents").doc(parentId).get();
+      if (!parentDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: "Parent non trouvé"
+        });
+      }
+
+      const etudiantData = etudiantDoc.data();
+      const parentData = parentDoc.data();
+
+      // Vérifier si déjà lié
+      if (etudiantData.parentId === encrypt(parentId)) {
+        return res.status(200).json({
+          status: true,
+          message: "Parent et étudiant déjà liés",
+          data: {
+            etudiant: {
+              id: etudiantDoc.id,
+              nom: etudiantData.nom,
+              prenom: etudiantData.prenom
+            },
+            parent: {
+              id: parentDoc.id,
+              nom: parentData.nom,
+              prenom: parentData.prenom
+            }
+          }
+        });
+      }
+
+      // Mettre à jour l'étudiant avec l'ID du parent
+      await this.collection.doc(id).update({
+        parentId: encrypt(parentId),
+        updatedAt: new Date()
+      });
+
+      // Mettre à jour le parent avec l'ID de l'étudiant
+      await db.collection("parents").doc(parentId).update({
+        etudiant_id: id,
+        updatedAt: new Date()
+      });
+
+      // Audit log
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'LINK_PARENT_STUDENT',
+        entityType: 'Etudiant',
+        entityId: id,
+        details: { 
+          parentId,
+          etudiantId: id,
+          parentName: `${parentData.prenom} ${parentData.nom}`,
+          studentName: `${etudiantData.prenom} ${etudiantData.nom}`
+        },
+      });
+      await auditLog.save();
+
+      return res.status(200).json({
+        status: true,
+        message: "Parent lié à l'étudiant avec succès",
+        data: {
+          etudiant: {
+            id: etudiantDoc.id,
+            nom: etudiantData.nom,
+            prenom: etudiantData.prenom,
+            parentId: parentId
+          },
+          parent: {
+            id: parentDoc.id,
+            nom: parentData.nom,
+            prenom: parentData.prenom,
+            etudiant_id: id
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error("Error linking parent to student:", error);
+      return res.status(500).json({
+        status: false,
+        message: "Erreur lors de la liaison parent-étudiant"
+      });
+    }
+  }
+
+  /**
+   * Obtenir les informations du parent d'un étudiant
+   * GET /etudiants/:id/parent
+   */
+  async getStudentParent(req, res) {
+    try {
+      const { id } = req.params;
+
+      // Récupérer l'étudiant
+      const etudiantDoc = await this.collection.doc(id).get();
+      if (!etudiantDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: "Étudiant non trouvé"
+        });
+      }
+
+      const etudiantData = etudiantDoc.data();
+
+      if (!etudiantData.parentId) {
+        return res.status(404).json({
+          status: false,
+          message: "Aucun parent assigné à cet étudiant"
+        });
+      }
+
+      // Récupérer le parent
+      const parentId = decrypt(etudiantData.parentId);
+      const parentDoc = await db.collection("parents").doc(parentId).get();
+      if (!parentDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: "Parent assigné non trouvé"
+        });
+      }
+
+      const parentData = parentDoc.data();
+
+      // Décrypter les données sensibles du parent
+      const decryptedParent = {
+        id: parentDoc.id,
+        nom: parentData.nom,
+        prenom: parentData.prenom,
+        email: parentData.email,
+        telephone: parentData.telephone ? decrypt(parentData.telephone) : null,
+        adresse: parentData.adresse ? decrypt(parentData.adresse) : null,
+        userId: parentData.userId,
+        createdAt: parentData.createdAt,
+        updatedAt: parentData.updatedAt
+      };
+
+      return res.status(200).json({
+        status: true,
+        data: decryptedParent
+      });
+
+    } catch (error) {
+      console.error("Error getting student parent:", error);
+      return res.status(500).json({
+        status: false,
+        message: "Erreur lors de la récupération du parent"
+      });
+    }
+  }
+
+  /**
+   * Dissocier un parent d'un étudiant
+   * DELETE /etudiants/:id/unlink-parent
+   */
+  async unlinkParent(req, res) {
+    try {
+      const { id } = req.params;
+
+      // Récupérer l'étudiant
+      const etudiantDoc = await this.collection.doc(id).get();
+      if (!etudiantDoc.exists) {
+        return res.status(404).json({
+          status: false,
+          message: "Étudiant non trouvé"
+        });
+      }
+
+      const etudiantData = etudiantDoc.data();
+
+      if (!etudiantData.parentId) {
+        return res.status(400).json({
+          status: false,
+          message: "Aucun parent assigné à cet étudiant"
+        });
+      }
+
+      const parentId = decrypt(etudiantData.parentId);
+
+      // Mettre à jour l'étudiant pour retirer l'ID du parent
+      await this.collection.doc(id).update({
+        parentId: null,
+        updatedAt: new Date()
+      });
+
+      // Mettre à jour le parent pour retirer l'ID de l'étudiant
+      await db.collection("parents").doc(parentId).update({
+        etudiant_id: null,
+        updatedAt: new Date()
+      });
+
+      // Audit log
+      const auditLog = new AuditLog({
+        userId: req.user?.id || 'system',
+        action: 'UNLINK_PARENT_STUDENT',
+        entityType: 'Etudiant',
+        entityId: id,
+        details: { 
+          parentId,
+          etudiantId: id
+        },
+      });
+      await auditLog.save();
+
+      return res.status(200).json({
+        status: true,
+        message: "Parent dissocié de l'étudiant avec succès"
+      });
+
+    } catch (error) {
+      console.error("Error unlinking parent from student:", error);
+      return res.status(500).json({
+        status: false,
+        message: "Erreur lors de la dissociation parent-étudiant"
+      });
+    }
+  }
+
+  /**
    * Supprimer un étudiant
    * DELETE /etudiants/:id
    */

@@ -616,4 +616,9 @@ router.delete('/:id', authenticate, etudiantController.delete.bind(etudiantContr
 // Routes du portail étudiant
 router.use('/portal', studentPortalRoutes);
 
+// Routes de liaison parent-étudiant
+router.post('/:id/link-parent', authenticate, etudiantController.linkParent.bind(etudiantController));
+router.get('/:id/parent', authenticate, etudiantController.getStudentParent.bind(etudiantController));
+router.delete('/:id/unlink-parent', authenticate, etudiantController.unlinkParent.bind(etudiantController));
+
 module.exports = router;

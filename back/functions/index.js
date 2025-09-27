@@ -19,19 +19,32 @@ const allowedOrigins = [
   "http://127.0.0.1:8081",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
+  // Ports Vite par défaut
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:4173",
+  "http://127.0.0.1:4173",
 ];
 
 server.use(
   cors({
     credentials: false,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      // En développement, accepter toutes les origines locales
+      if (!origin || 
+          allowedOrigins.includes(origin) ||
+          origin.includes('localhost') ||
+          origin.includes('127.0.0.1') ||
+          origin.includes('0.0.0.0')) {
+        console.log(`✅ CORS autorisé pour: ${origin || 'no origin'}`);
         callback(null, true);
       } else {
+        console.log(`❌ CORS refusé pour: ${origin}`);
         callback(new Error("Not allowed by CORS"));
       }
-    }
+    },
+    optionsSuccessStatus: 200
   })
 );
 
@@ -85,35 +98,40 @@ function authMiddleware(req, res, next) {
 }
 
 
-// ✅ Routes (protected with JWT) - Lazy loading pour éviter les timeouts
-let apiRouter;
-let isApiLoaded = false;
+// ✅ Routes de santé (sans authentification)
+server.get("/v1/health", (req, res) => {
+  res.json({
+    status: true,
+    message: "API is healthy",
+    timestamp: new Date().toISOString(),
+    version: "1.0.0"
+  });
+});
 
-// Fonction pour charger les routes de manière paresseuse
-function loadApiRoutes() {
-  if (!isApiLoaded) {
-    try {
-      apiRouter = require("./src/api");
-      isApiLoaded = true;
-      console.log("✅ API routes loaded successfully");
-    } catch (error) {
-      console.error("❌ Error loading API routes:", error);
-      throw error;
-    }
-  }
-  return apiRouter;
-}
+server.get("/v1/diagnostic", (req, res) => {
+  res.json({
+    status: true,
+    message: "Diagnostic complet",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || "development",
+    nodeVersion: process.version,
+    uptime: process.uptime(),
+    memory: process.memoryUsage()
+  });
+});
 
-// Middleware pour charger les routes à la demande
+// ✅ Routes (protected with JWT) - Chargement direct pour éviter les timeouts
 server.use("/v1", authMiddleware, (req, res, next) => {
   try {
-    const api = loadApiRoutes();
+    // Charger les routes directement sans lazy loading
+    const api = require("./src/api");
     api(req, res, next);
   } catch (error) {
     console.error("❌ Error in API middleware:", error);
     res.status(500).json({
       status: false,
-      message: "Erreur interne du serveur"
+      message: "Erreur interne du serveur",
+      error: error.message
     });
   }
 });

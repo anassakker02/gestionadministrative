@@ -316,4 +316,9 @@ router.get('/:id', ParentController.getById.bind(ParentController));
 router.put('/:id', ParentController.update.bind(ParentController));
 router.delete('/:id', ParentController.delete.bind(ParentController));
 
+// Routes de liaison parent-étudiant
+router.post('/:id/link-student', ParentController.linkStudent.bind(ParentController));
+router.get('/:id/student', ParentController.getParentStudent.bind(ParentController));
+router.delete('/:id/unlink-student', ParentController.unlinkStudent.bind(ParentController));
+
 module.exports = router;
