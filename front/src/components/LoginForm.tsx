@@ -29,7 +29,22 @@ export function LoginForm() {
     try {
       const success = await login({ email, password });
       if (success) {
-        navigate("/dashboard");
+        // Récupérer les données utilisateur pour déterminer la redirection
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
+          
+          // Rediriger les étudiants et parents vers le portail
+          if (userData.role === 'etudiant' || userData.role === 'parent') {
+            navigate("/portal");
+          } else {
+            // Les autres rôles (admin, comptable, etc.) vont au dashboard
+            navigate("/dashboard");
+          }
+        } else {
+          // Fallback vers dashboard si pas de données utilisateur
+          navigate("/dashboard");
+        }
       }
     } catch (error) {
       console.error("Erreur lors de la connexion:", error);
@@ -113,6 +128,7 @@ export function LoginForm() {
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4 text-muted-foreground" />

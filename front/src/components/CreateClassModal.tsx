@@ -36,14 +36,25 @@ interface CreateClassModalProps {
 }
 
 const formSchema = z.object({
-  nom: z.string().min(2, { message: "Le nom doit contenir au moins 2 caractères." }),
-  niveau: z.string().min(2, { message: "Le niveau doit contenir au moins 2 caractères." }),
-  capacite: z.coerce.number().min(1, { message: "La capacité doit être au moins 1." }),
+  nom: z
+    .string()
+    .min(2, { message: "Le nom doit contenir au moins 2 caractères." }),
+  niveau: z
+    .string()
+    .min(2, { message: "Le niveau doit contenir au moins 2 caractères." }),
+  capacite: z.coerce
+    .number()
+    .min(1, { message: "La capacité doit être au moins 1." }),
   description: z.string().optional(),
-  annee_scolaire: z.string().min(4, { message: "L'année scolaire doit contenir 4 chiffres." }),
+  annee_scolaire: z
+    .string()
+    .min(4, { message: "L'année scolaire doit contenir 4 chiffres." }),
 });
 
-const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose }) => {
+const CreateClassModal: React.FC<CreateClassModalProps> = ({
+  isOpen,
+  onClose,
+}) => {
   const queryClient = useQueryClient();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -82,7 +93,12 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose }) 
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Créer une nouvelle classe</DialogTitle>
@@ -91,7 +107,10 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose }) 
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4 py-4">
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="grid gap-4 py-4"
+          >
             <FormField
               control={form.control}
               name="nom"
@@ -99,7 +118,11 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose }) 
                 <FormItem>
                   <FormLabel>Nom de la classe</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ex: Informatique A" {...field} />
+                    <Input
+                      autoFocus
+                      placeholder="Ex: Informatique A"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -111,14 +134,20 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose }) 
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Niveau</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Sélectionner un niveau" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {['1ère année', '2ème année', '3ème année', '4ème année', '5ème année', 'Master 1', 'Master 2', 'Doctorat'].map((level) => (
+                      {[
+                        "1ère année",
+                        "2ème année",
+                        "3ème année",
+                        "Master 1",
+                        "Master 2",
+                      ].map((level) => (
                         <SelectItem key={level} value={level}>
                           {level}
                         </SelectItem>
@@ -149,7 +178,10 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose }) 
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ex: Promotion Master Informatique" {...field} />
+                    <Input
+                      placeholder="Ex: Promotion Master Informatique"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -168,9 +200,14 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose }) 
                 </FormItem>
               )}
             />
-            <Button type="submit" className="mt-4 w-full"
-            disabled={createClassMutation.isPending}>
-              {createClassMutation.isPending ? "Création en cours..." : "Créer la classe"}
+            <Button
+              type="submit"
+              className="mt-4 w-full"
+              disabled={createClassMutation.isPending}
+            >
+              {createClassMutation.isPending
+                ? "Création en cours..."
+                : "Créer la classe"}
             </Button>
           </form>
         </Form>

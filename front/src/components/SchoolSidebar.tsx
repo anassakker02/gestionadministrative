@@ -19,112 +19,221 @@ import {
   DollarSign,
   UserCheck,
   Bell,
-  Settings,
   BookOpen,
   Award,
   LayoutDashboard,
   LogOut,
+  PieChart,
+  User,
+  FileText,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTranslation } from "react-i18next";
 
 const menuItems = [
   {
-    title: "Principal",
+    title: "sidebar.principal",
     items: [
-      { title: "Tableau de bord", url: "/dashboard", icon: LayoutDashboard },
+      { title: "sidebar.dashboard", url: "/dashboard", icon: LayoutDashboard },
     ],
   },
   {
-    title: "Gestion des Étudiants",
+    title: "sidebar.gestion_etudiants",
     items: [
-      { title: "Étudiants", url: "/students", icon: GraduationCap },
-      { title: "Classes", url: "/classes", icon: BookOpen },
-      { title: "Emploi du temps", url: "/schedules", icon: Calendar },
+      { title: "sidebar.students", url: "/students", icon: GraduationCap },
+      { title: "sidebar.classes", url: "/classes", icon: BookOpen },
     ],
   },
   {
-    title: "Gestion Financière",
+    title: "sidebar.gestion_financiere",
     items: [
-      { title: "Tarifs", url: "/tarifs", icon: DollarSign },
-      { title: "Factures", url: "/factures", icon: Receipt },
-      { title: "Paiements", url: "/payments", icon: CreditCard },
-      { title: "Échéanciers", url: "/echeanciers", icon: Calendar },
-      { title: "Frais Ponctuels", url: "/fees", icon: DollarSign },
+      { title: "sidebar.tariffs", url: "/tarifs", icon: DollarSign },
+      {
+        title: "sidebar.payment_dashboard",
+        url: "/payment-management",
+        icon: PieChart,
+      },
+      { title: "sidebar.payments", url: "/payments", icon: CreditCard },
+      { title: "sidebar.payment_plans", url: "/payment-plans", icon: FileText },
     ],
   },
   {
-    title: "Aide & Suivi",
+    title: "sidebar.aide_suivi",
     items: [
-      { title: "Bourses", url: "/bourses", icon: Award },
-      { title: "Relances", url: "/relances", icon: Bell },
+      { title: "sidebar.bourses", url: "/bourses", icon: Award },
+      { title: "sidebar.reminders", url: "/relances", icon: Bell },
     ],
   },
   {
-    title: "Administration",
+    title: "sidebar.administration",
     items: [
-      { title: "Utilisateurs", url: "/users", icon: UserCheck },
-      { title: "Paramètres", url: "/settings", icon: Settings },
+      { title: "sidebar.users", url: "/users", icon: UserCheck },
     ],
   },
   {
-    title: "Compte",
+    title: "sidebar.portal",
     items: [
-      { title: "Profil", url: "/profile", icon: UserCheck },
-      { title: "Déconnexion", url: "/logout", icon: LogOut },
+      { title: "sidebar.portal", url: "/portal", icon: User },
+      { title: "sidebar.profile", url: "/profile", icon: UserCheck },
     ],
   },
 ];
 
-export function SchoolSidebar({ userRole }: { userRole?: string }) {
+export function SchoolSidebar() {
+  const { t } = useTranslation();
   const { state } = useSidebar();
   const location = useLocation();
   const collapsed = state === "collapsed";
 
-  // Filtrer les menus selon le rôle
+  // Fonction pour déterminer si un élément de menu est actif
+  const isMenuItemActive = (itemUrl: string, currentPath: string) => {
+    // Correspondance exacte
+    if (itemUrl === currentPath) {
+      return true;
+    }
+    
+    // Correspondance pour les routes avec paramètres (ex: /students/123)
+    if (currentPath.startsWith(itemUrl + '/')) {
+      return true;
+    }
+    
+    // Cas spéciaux pour certaines routes
+    if (itemUrl === '/portal' && (currentPath === '/portal' || currentPath.startsWith('/portal/'))) {
+      return true;
+    }
+    
+    if (itemUrl === '/profile' && currentPath === '/profile') {
+      return true;
+    }
+    
+    if (itemUrl === '/dashboard' && currentPath === '/dashboard') {
+      return true;
+    }
+    
+    // Cas spéciaux pour les étudiants
+    if (itemUrl === '/students' && (currentPath.startsWith('/students') || currentPath.startsWith('/student'))) {
+      return true;
+    }
+    
+    // Cas spéciaux pour les paiements - plus précis
+    if (itemUrl === '/payments' && currentPath.startsWith('/payments')) {
+      return true;
+    }
+    
+    // Cas spéciaux pour le tableau de bord des paiements
+    if (itemUrl === '/payment-management' && currentPath.startsWith('/payment-management')) {
+      return true;
+    }
+    
+    // Cas spéciaux pour les plans de paiement
+    if (itemUrl === '/payment-plans' && currentPath.startsWith('/payment-plans')) {
+      return true;
+    }
+    
+    return false;
+  };
+  
+  // Vérification de sécurité pour éviter l'erreur useAuth
+  let authContext;
+  try {
+    authContext = useAuth();
+  } catch (error) {
+    console.error("AuthContext not available:", error);
+    return null; // Retourner null si le contexte n'est pas disponible
+  }
+  
+  const {
+    user,
+    isAdmin,
+    isSubAdmin,
+    isComptable,
+    isEtudiant,
+    isParent,
+    isEnseignant,
+    hasRole,
+    logout,
+  } = authContext;
+
   let filteredMenuItems = [];
-  if (!userRole) {
-    filteredMenuItems = [menuItems[menuItems.length - 1]]; // just Profil/Déconnexion
-  } else if (userRole === "admin") {
-    filteredMenuItems = menuItems; // admin : tout voir
-  } else if (userRole === "etudiant") {
-    const studentAllowedItems = new Set([
-      "Tableau de bord",
-      "Factures",
-      "Bourses",
-      "Profil",
-      "Déconnexion",
+  if (!user) {
+    filteredMenuItems = [];
+  } else if (isAdmin) {
+    // Admin a accès à tout, y compris le portail
+    filteredMenuItems = menuItems;
+  } else if (isSubAdmin) {
+    // Sous-admin a accès à tout comme l'admin, sauf la gestion des sous-admin
+    filteredMenuItems = menuItems;
+  } else if (isComptable) {
+    const comptableAllowedTitles = new Set([
+      "sidebar.principal",
+      "sidebar.gestion_financiere",
+      "sidebar.portal",
+    ]);
+    const comptableAllowedItems = new Set([
+      "sidebar.dashboard",
+      "sidebar.tariffs",
+      "sidebar.payment_dashboard",
+      "sidebar.payments",
+      "sidebar.portal",
+      "sidebar.profile",
+    ]);
+
+    filteredMenuItems = menuItems
+      .filter((section) => comptableAllowedTitles.has(section.title))
+      .map((section) => {
+        return {
+          ...section,
+          items: section.items.filter((item) =>
+            comptableAllowedItems.has(item.title)
+          ),
+        };
+      })
+      .filter((section) => section.items.length > 0);
+  } else if (isEtudiant) {
+    const etudiantAllowedItems = new Set([
+      "sidebar.portal",
+      "sidebar.profile",
     ]);
 
     filteredMenuItems = menuItems
       .map((section) => {
         const filteredSectionItems = section.items.filter((item) =>
-          studentAllowedItems.has(item.title)
+          etudiantAllowedItems.has(item.title)
         );
         return {
           ...section,
           items: filteredSectionItems,
         };
       })
-      .filter((section) => section.items.length > 0); // Remove sections that are empty after filtering items
-  } else if (userRole === "comptable") {
-    const comptableAllowedItems = new Set([
-      "Tableau de bord",
-      "Étudiants",
-      "Classes",
-      "Tarifs",
-      "Factures", 
-      "Paiements",
-      "Échéanciers",
-      "Frais Ponctuels",
-      "Relances",
-      "Profil",
-      "Déconnexion",
+      .filter((section) => section.items.length > 0);
+  } else if (isParent) {
+    const parentAllowedItems = new Set([
+      "sidebar.portal",
+      "sidebar.profile",
     ]);
 
     filteredMenuItems = menuItems
       .map((section) => {
         const filteredSectionItems = section.items.filter((item) =>
-          comptableAllowedItems.has(item.title)
+          parentAllowedItems.has(item.title)
+        );
+        return {
+          ...section,
+          items: filteredSectionItems,
+        };
+      })
+      .filter((section) => section.items.length > 0);
+  } else if (isEnseignant) {
+    const enseignantAllowedItems = new Set([
+      "sidebar.dashboard",
+      "sidebar.classes",
+    ]);
+
+    filteredMenuItems = menuItems
+      .map((section) => {
+        const filteredSectionItems = section.items.filter((item) =>
+          enseignantAllowedItems.has(item.title)
         );
         return {
           ...section,
@@ -133,9 +242,23 @@ export function SchoolSidebar({ userRole }: { userRole?: string }) {
       })
       .filter((section) => section.items.length > 0);
   } else {
-    filteredMenuItems = menuItems.filter(
-      (section) => section.title !== "Administration"
-    ); // autres rôles : tout sauf admin
+    // Fallback pour les autres rôles - permettre l'accès au portail
+    const fallbackAllowedItems = new Set([
+      "sidebar.dashboard",
+      "sidebar.portal",
+    ]);
+
+    filteredMenuItems = menuItems
+      .map((section) => {
+        const filteredSectionItems = section.items.filter((item) =>
+          fallbackAllowedItems.has(item.title)
+        );
+        return {
+          ...section,
+          items: filteredSectionItems,
+        };
+      })
+      .filter((section) => section.items.length > 0);
   }
 
   const isActive = (path: string) => location.pathname === path;
@@ -143,50 +266,93 @@ export function SchoolSidebar({ userRole }: { userRole?: string }) {
   return (
     <Sidebar className={collapsed ? "w-16" : "w-64"} collapsible="icon">
       <SidebarContent className="bg-sidebar">
-        <div className="p-4 border-b border-sidebar-border">
-          <h2
-            className={`font-bold text-sidebar-foreground transition-all ${
-              collapsed ? "text-xs text-center" : "text-lg"
-            }`}
-          >
-            {collapsed ? "YC" : "YNOV Campus"}
-          </h2>
+        <div className="p-4 border-b border-sidebar-border flex items-center justify-center">
+          <div className="flex items-center space-x-2">
+            <GraduationCap className="h-8 w-8 text-primary" />
+            {!collapsed && (
+              <div className="flex flex-col">
+                <h2 className="font-bold text-lg text-sidebar-foreground whitespace-nowrap">
+                  École Supérieure
+                </h2>
+                <p className="text-sm text-muted-foreground whitespace-nowrap">
+                  Gestion des Frais
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
+        {/* Filter out "Factures" for comptable */}
         {filteredMenuItems.map((section) => (
           <SidebarGroup key={section.title}>
             {!collapsed && (
               <SidebarGroupLabel className="text-sidebar-foreground/70">
-                {section.title}
+                {t(section.title)}
               </SidebarGroupLabel>
             )}
             <SidebarGroupContent>
               <SidebarMenu>
-                {section.items.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink
-                        to={item.url}
-                        className={({ isActive }) =>
-                          `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                {section.items.map((item) => {
+                  const isActive = isMenuItemActive(item.url, location.pathname);
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.url}
+                          className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
                             isActive
                               ? "bg-sidebar-primary text-sidebar-primary-foreground"
                               : "hover:bg-sidebar-accent text-sidebar-foreground"
-                          }`
-                        }
-                      >
-                        <item.icon className="h-5 w-5 flex-shrink-0" />
-                        {!collapsed && (
-                          <span className="font-medium">{item.title}</span>
-                        )}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                          }`}
+                        >
+                          <item.icon className="h-5 w-5 flex-shrink-0" />
+                          {!collapsed && (
+                            <span className="font-medium">{t(item.title)}</span>
+                          )}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         ))}
+
+        {/* User Profile at the bottom of the sidebar */}
+        {user && (
+          <div className="mt-auto border-t border-sidebar-border">
+            <div className="p-4 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold">
+                {user.prenom ? user.prenom.charAt(0).toUpperCase() : ''}
+              </div>
+              {!collapsed && (
+                <div className="flex flex-col">
+                  <span className="font-medium text-sidebar-foreground whitespace-nowrap">
+                    {user.prenom} {user.nom}
+                  </span>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : ''}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="px-4 pb-4">
+              <button 
+                onClick={() => {
+                  logout();
+                  window.location.href = "/login";
+                }}
+                className="flex items-center gap-3 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors w-full text-left"
+              >
+                <LogOut className="h-4 w-4" />
+                {!collapsed && (
+                  <span className="text-sm font-medium">Déconnexion</span>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </SidebarContent>
     </Sidebar>
   );

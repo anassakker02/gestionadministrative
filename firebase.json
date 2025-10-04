@@ -1,0 +1,21 @@
+{
+  "functions": {
+    "source": "back/functions",
+    "runtime": "nodejs18",
+    "timeout": "30s",
+    "memory": "256MB"
+  },
+  "emulators": {
+    "functions": {
+      "port": 5001,
+      "timeout": "30s"
+    },
+    "firestore": {
+      "port": 8081
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4001
+    }
+  }
+}

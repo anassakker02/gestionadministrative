@@ -1,32 +1,25 @@
-import axios from "axios";
+import { apiRequest } from "@/lib/api";
 
 export interface Echeancier {
   id?: string;
   nom: string;
   description: string;
   // Ajoutez d'autres champs si nécessaire
+  [key: string]: unknown;
 }
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5001/frais-gestionScolaire/us-central1/api/v1";
-
 export const getEcheanciers = async () => {
-  const { data } = await axios.get(`${API_URL}/echeanciers`);
-  return data;
+  return await apiRequest("/echeanciers", "GET");
 };
 
 export const createEcheancier = async (echeancier: Echeancier) => {
-  const { data } = await axios.post(`${API_URL}/echeanciers`, echeancier);
-  return data;
+  return await apiRequest("/echeanciers", "POST", echeancier);
 };
 
 export const updateEcheancier = async (id: string, echeancier: Echeancier) => {
-  const { data } = await axios.put(`${API_URL}/echeanciers/${id}`, echeancier);
-  return data;
+  return await apiRequest(`/echeanciers/${id}`, "PUT", echeancier);
 };
 
 export const deleteEcheancier = async (id: string) => {
-  const { data } = await axios.delete(`${API_URL}/echeanciers/${id}`);
-  return data;
+  return await apiRequest(`/echeanciers/${id}`, "DELETE");
 };

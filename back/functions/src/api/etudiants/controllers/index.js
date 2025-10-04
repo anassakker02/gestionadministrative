@@ -1056,6 +1056,15 @@ class EtudiantController {
         updatedAt: new Date()
       });
 
+      // Mettre à jour l'utilisateur parent avec l'ID de l'étudiant
+      if (parentData.user_id) {
+        await db.collection("users").doc(parentData.user_id).update({
+          etudiant_id: id,
+          updatedAt: new Date()
+        });
+        console.log(`✅ Utilisateur parent mis à jour avec etudiant_id: ${id}`);
+      }
+
       // Audit log
       const auditLog = new AuditLog({
         userId: req.user?.id || 'system',

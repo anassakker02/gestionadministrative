@@ -28,12 +28,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { createEtudiant, Etudiant, getClassesForStudentForm, getBoursesForStudentForm } from "../api/etudiantsApi";
+import {
+  createEtudiant,
+  Etudiant,
+  getClassesForStudentForm,
+  getBoursesForStudentForm,
+} from "../api/etudiantsApi";
+import { studentService } from "../services/studentService";
+import { userService } from "@/services/userService";
+import { tarifService } from "@/services/tarifService";
 
 interface CreateStudentModalProps {
   isOpen: boolean;
@@ -41,21 +53,45 @@ interface CreateStudentModalProps {
 }
 
 const formSchema = z.object({
-  nom: z.string().min(2, { message: "Le nom doit contenir au moins 2 caractères." }),
-  prenom: z.string().min(2, { message: "Le prénom doit contenir au moins 2 caractères." }),
-  date_naissance: z.date({ required_error: "La date de naissance est requise." }),
+  // On sélectionne un user existant si disponible (user_id), sinon on accepte la saisie libre
+  user_id: z.string().optional(),
+  date_naissance: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
+    message:
+      "La date de naissance est requise et doit être au format AAAA-MM-JJ.",
+  }),
   classe_id: z.string({ required_error: "La classe est requise." }),
   nationalite: z.string().min(2, { message: "La nationalité est requise." }),
   bourse_id: z.string().optional(),
 });
 
-const CreateStudentModal: React.FC<CreateStudentModalProps> = ({ isOpen, onClose }) => {
+// Ajout helpers pour années, mois, jours
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 100 }, (_, i) => currentYear - i);
+const months = [
+  "Janvier",
+  "Février",
+  "Mars",
+  "Avril",
+  "Mai",
+  "Juin",
+  "Juillet",
+  "Août",
+  "Septembre",
+  "Octobre",
+  "Novembre",
+  "Décembre",
+];
+const days = Array.from({ length: 31 }, (_, i) => i + 1);
+
+const CreateStudentModal: React.FC<CreateStudentModalProps> = ({
+  isOpen,
+  onClose,
+}) => {
   const queryClient = useQueryClient();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      nom: "",
-      prenom: "",
+      user_id: undefined,
       // date_naissance: undefined,
       classe_id: "",
       nationalite: "",
@@ -71,6 +107,18 @@ const CreateStudentModal: React.FC<CreateStudentModalProps> = ({ isOpen, onClose
   const { data: bourses, isLoading: isLoadingBourses } = useQuery({
     queryKey: ["boursesForForm"],
     queryFn: getBoursesForStudentForm,
+  });
+
+  const { data: availableUsersResp } = useQuery({
+    queryKey: ["availableUsersForStudent"],
+    queryFn: () => userService.getAvailableForStudent(),
+  });
+  const availableUsers = availableUsersResp?.data || [];
+
+  // Récupérer les tarifs de scolarité pour afficher le calcul automatique
+  const { data: scolariteTarifs } = useQuery({
+    queryKey: ["scolarite-tarifs"],
+    queryFn: () => tarifService.getScolariteTarifs(),
   });
 
   const createStudentMutation = useMutation({
@@ -93,14 +141,55 @@ const CreateStudentModal: React.FC<CreateStudentModalProps> = ({ isOpen, onClose
     },
   });
 
-  const onSubmit = (values: z.infer<typeof formSchema>) => {
-    const formattedValues = {
-      ...values,
-      date_naissance: format(values.date_naissance, "yyyy-MM-dd"),
-      bourse_id: values.bourse_id === "none" ? null : values.bourse_id, // Convert "none" to null
-    };
-    createStudentMutation.mutate(formattedValues as Etudiant);
+  const [selectedYear, setSelectedYear] = React.useState<number | null>(null);
+  const [selectedMonth, setSelectedMonth] = React.useState<number | null>(null);
+  const [selectedDay, setSelectedDay] = React.useState<number | null>(null);
+
+  // Calculer le total des frais de scolarité
+  const calculateTotalFees = () => {
+    if (!scolariteTarifs?.data) return 0;
+    
+    const tarifs = scolariteTarifs.data;
+    const fraisInscription = tarifs.find((t: any) => t.nom === "Frais Inscription")?.montant || 0;
+    const fraisScolarite = tarifs.find((t: any) => t.nom === "Frais scolaire")?.montant || 0;
+    
+    return fraisInscription + fraisScolarite;
   };
+
+  const totalFees = calculateTotalFees();
+
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    let date_naissance = null;
+    if (selectedYear && selectedMonth && selectedDay) {
+      date_naissance = `${selectedYear}-${String(selectedMonth).padStart(
+        2,
+        "0"
+      )}-${String(selectedDay).padStart(2, "0")}`;
+    }
+
+    const payload: any = {
+      date_naissance,
+      classe_id: values.classe_id,
+      nationalite: values.nationalite,
+      bourse_id: values.bourse_id === "none" ? null : values.bourse_id,
+    };
+
+    if ((values as any).user_id) {
+      payload.user_id = (values as any).user_id;
+    }
+
+    createStudentMutation.mutate(payload);
+  };
+
+  React.useEffect(() => {
+    if (selectedYear && selectedMonth && selectedDay) {
+      const dateStr = `${selectedYear}-${String(selectedMonth).padStart(
+        2,
+        "0"
+      )}-${String(selectedDay).padStart(2, "0")}`;
+      form.setValue("date_naissance", dateStr);
+    }
+  }, [selectedYear, selectedMonth, selectedDay]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -112,28 +201,40 @@ const CreateStudentModal: React.FC<CreateStudentModalProps> = ({ isOpen, onClose
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-2 gap-4 py-4">
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="grid grid-cols-2 gap-4 py-4"
+          >
             <FormField
               control={form.control}
-              name="nom"
+              name="user_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nom</FormLabel>
+                  <FormLabel>Compte utilisateur (sélection)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ex: Dupont" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="prenom"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Prénom</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ex: Jean" {...field} />
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner un compte utilisateur" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableUsers.length > 0 ? (
+                          availableUsers.map((u: any) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.prenom} {u.nom} ({u.email})
+                            </SelectItem>
+                          ))
+                        ) : (
+                          // Radix Select requires non-empty value for items.
+                          // Use a sentinel value and keep the item disabled so it cannot be selected.
+                          <SelectItem value="no_user_available" disabled>
+                            Aucun utilisateur disponible
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -142,40 +243,53 @@ const CreateStudentModal: React.FC<CreateStudentModalProps> = ({ isOpen, onClose
             <FormField
               control={form.control}
               name="date_naissance"
-              render={({ field }) => (
+              render={() => (
                 <FormItem className="flex flex-col">
                   <FormLabel>Date de Naissance</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value ? (
-                            format(field.value, "PPP")
-                          ) : (
-                            <span>Choisir une date</span>
-                          )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) =>
-                          date > new Date() || date < new Date("1900-01-01")
-                        }
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <div className="flex gap-2">
+                    <Select
+                      onValueChange={(val) => setSelectedYear(Number(val))}
+                    >
+                      <SelectTrigger className="w-24">
+                        <SelectValue placeholder="Année" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {years.map((year) => (
+                          <SelectItem key={year} value={year.toString()}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      onValueChange={(val) => setSelectedMonth(Number(val))}
+                    >
+                      <SelectTrigger className="w-28">
+                        <SelectValue placeholder="Mois" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {months.map((month, idx) => (
+                          <SelectItem key={month} value={(idx + 1).toString()}>
+                            {month}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      onValueChange={(val) => setSelectedDay(Number(val))}
+                    >
+                      <SelectTrigger className="w-20">
+                        <SelectValue placeholder="Jour" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {days.map((day) => (
+                          <SelectItem key={day} value={day.toString()}>
+                            {day}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
@@ -199,7 +313,10 @@ const CreateStudentModal: React.FC<CreateStudentModalProps> = ({ isOpen, onClose
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Classe</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger disabled={isLoadingClasses}>
                         <SelectValue placeholder="Sélectionner une classe" />
@@ -207,7 +324,9 @@ const CreateStudentModal: React.FC<CreateStudentModalProps> = ({ isOpen, onClose
                     </FormControl>
                     <SelectContent>
                       {isLoadingClasses ? (
-                        <SelectItem value="loading" disabled>Chargement...</SelectItem>
+                        <SelectItem value="loading" disabled>
+                          Chargement...
+                        </SelectItem>
                       ) : (
                         classes?.map((classe: any) => (
                           <SelectItem key={classe.id} value={classe.id}>
@@ -227,7 +346,10 @@ const CreateStudentModal: React.FC<CreateStudentModalProps> = ({ isOpen, onClose
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Bourse (optionnel)</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value || "none"}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value || "none"}
+                  >
                     <FormControl>
                       <SelectTrigger disabled={isLoadingBourses}>
                         <SelectValue placeholder="Sélectionner une bourse" />
@@ -235,7 +357,9 @@ const CreateStudentModal: React.FC<CreateStudentModalProps> = ({ isOpen, onClose
                     </FormControl>
                     <SelectContent>
                       {isLoadingBourses ? (
-                        <SelectItem value="loading" disabled>Chargement...</SelectItem>
+                        <SelectItem value="loading" disabled>
+                          Chargement...
+                        </SelectItem>
                       ) : (
                         bourses?.map((bourse: any) => (
                           <SelectItem key={bourse.id} value={bourse.id}>
@@ -251,9 +375,47 @@ const CreateStudentModal: React.FC<CreateStudentModalProps> = ({ isOpen, onClose
               )}
             />
 
-            <Button type="submit" className="mt-4 col-span-2"
-            disabled={createStudentMutation.isPending}>
-              {createStudentMutation.isPending ? "Ajout en cours..." : "Ajouter l\'étudiant"}
+            {/* Section d'information sur les frais */}
+            <div className="col-span-2 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="font-semibold text-blue-900 mb-2">💰 Calcul automatique des frais</h4>
+              <div className="space-y-2 text-sm">
+                {scolariteTarifs?.data ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span>Frais d'inscription:</span>
+                      <span className="font-medium">
+                        {scolariteTarifs.data.find((t: any) => t.nom === "Frais Inscription")?.montant || 0} MAD
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Frais de scolarité:</span>
+                      <span className="font-medium">
+                        {scolariteTarifs.data.find((t: any) => t.nom === "Frais scolaire")?.montant || 0} MAD
+                      </span>
+                    </div>
+                    <hr className="border-blue-200" />
+                    <div className="flex justify-between font-semibold text-blue-900">
+                      <span>Total frais_payment:</span>
+                      <span>{totalFees} MAD</span>
+                    </div>
+                    <p className="text-xs text-blue-700 mt-2">
+                      💡 Ce montant sera automatiquement calculé lors de la création de l'étudiant
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-blue-700">Chargement des tarifs...</p>
+                )}
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              className="mt-4 col-span-2"
+              disabled={createStudentMutation.isPending}
+            >
+              {createStudentMutation.isPending
+                ? "Ajout en cours..."
+                : "Ajouter l'étudiant"}
             </Button>
           </form>
         </Form>

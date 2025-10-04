@@ -13,8 +13,11 @@ import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, User, Mail, Lock, Building } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiRequest } from "@/lib/api";
+import { useTranslation } from "react-i18next";
+import { toast } from "@/components/ui/use-toast";
 
 export function RegisterForm() {
+  const { t } = useTranslation();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -32,17 +35,28 @@ export function RegisterForm() {
     e.preventDefault();
     setLoading(true);
     try {
-      // Appel API d'inscription avec le bon endpoint backend
+      // Appel API d'inscription avec le rôle "user" et isActive: false
       await apiRequest("/auth/register", "POST", {
         nom: formData.lastName,
         prenom: formData.firstName,
         email: formData.email,
         password: formData.password,
-        role: "student",
+        role: "user", // Rôle par défaut pour les nouvelles inscriptions
+        isActive: false, // Compte inactif jusqu'à validation admin
       });
-      navigate("/dashboard");
+      
+      // Afficher un message de confirmation avec toast
+      toast({
+        title: "Inscription réussie",
+        description: "Votre inscription a été soumise avec succès. Votre compte sera activé par un administrateur.",
+      });
+      navigate("/login");
     } catch (err: any) {
-      alert(err?.message || "Erreur lors de l'inscription");
+      toast({
+        title: "Erreur d'inscription",
+        description: err?.message || t("register.error_creating_account"),
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -64,10 +78,10 @@ export function RegisterForm() {
             <User className="h-6 w-6 text-white" />
           </div>
           <CardTitle className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-            Créer un compte
+            {t("register.title")}
           </CardTitle>
           <CardDescription className="text-muted-foreground">
-            Remplissez vos informations pour créer votre compte
+            {t("register.description")}
           </CardDescription>
         </CardHeader>
 
@@ -79,14 +93,14 @@ export function RegisterForm() {
                   htmlFor="firstName"
                   className="text-sm font-medium text-foreground"
                 >
-                  Prénom
+                  {t("register.first_name")}
                 </Label>
                 <div className="relative">
                   <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="firstName"
                     type="text"
-                    placeholder="Votre prénom"
+                    placeholder={t("register.placeholder_first_name")}
                     value={formData.firstName}
                     onChange={(e) =>
                       handleInputChange("firstName", e.target.value)
@@ -102,14 +116,14 @@ export function RegisterForm() {
                   htmlFor="lastName"
                   className="text-sm font-medium text-foreground"
                 >
-                  Nom
+                  {t("register.last_name")}
                 </Label>
                 <div className="relative">
                   <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="lastName"
                     type="text"
-                    placeholder="Votre nom"
+                    placeholder={t("register.placeholder_last_name")}
                     value={formData.lastName}
                     onChange={(e) =>
                       handleInputChange("lastName", e.target.value)
@@ -126,14 +140,14 @@ export function RegisterForm() {
                 htmlFor="email"
                 className="text-sm font-medium text-foreground"
               >
-                Adresse email
+                {t("register.email_address")}
               </Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="email"
                   type="email"
-                  placeholder="votre@email.com"
+                  placeholder={t("register.placeholder_email")}
                   value={formData.email}
                   onChange={(e) => handleInputChange("email", e.target.value)}
                   className="pl-10 bg-background/50 border-primary/20 focus:border-primary transition-smooth"
@@ -149,14 +163,14 @@ export function RegisterForm() {
                 htmlFor="password"
                 className="text-sm font-medium text-foreground"
               >
-                Mot de passe
+                {t("register.password")}
               </Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
+                  placeholder={t("register.placeholder_password")}
                   value={formData.password}
                   onChange={(e) =>
                     handleInputChange("password", e.target.value)
@@ -168,6 +182,7 @@ export function RegisterForm() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-3 text-muted-foreground hover:text-foreground transition-smooth"
+                  aria-label={t(showPassword ? "register.hide_password" : "register.show_password")}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -183,14 +198,14 @@ export function RegisterForm() {
                 htmlFor="confirmPassword"
                 className="text-sm font-medium text-foreground"
               >
-                Confirmer le mot de passe
+                {t("register.confirm_password")}
               </Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
-                  placeholder="••••••••"
+                  placeholder={t("register.placeholder_confirm_password")}
                   value={formData.confirmPassword}
                   onChange={(e) =>
                     handleInputChange("confirmPassword", e.target.value)
@@ -202,6 +217,7 @@ export function RegisterForm() {
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3 top-3 text-muted-foreground hover:text-foreground transition-smooth"
+                  aria-label={t(showConfirmPassword ? "register.hide_confirm_password" : "register.show_confirm_password")}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -217,17 +233,17 @@ export function RegisterForm() {
               className="w-full bg-gradient-primary hover:bg-primary/90 text-white font-semibold py-2 px-4 rounded-md transition-smooth shadow-lg hover:shadow-primary/25"
               disabled={loading}
             >
-              {loading ? "Création..." : "Créer le compte"}
+              {loading ? t("register.creating_account") : t("register.create_account")}
             </Button>
 
             <div className="text-center space-y-2">
               <p className="text-sm text-muted-foreground">
-                Vous avez déjà un compte?{" "}
+                {t("register.already_have_account")}{" "}
                 <Link
                   to="/login"
                   className="font-medium text-primary hover:text-primary/80 transition-smooth"
                 >
-                  Se connecter
+                  {t("register.sign_in_here")}
                 </Link>
               </p>
             </div>

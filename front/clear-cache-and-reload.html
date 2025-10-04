@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Cache and Reload</title>
+</head>
+<body>
+    <h1>Nettoyage du cache et rechargement</h1>
+    <button onclick="clearCacheAndReload()">Nettoyer le cache et recharger</button>
+    <div id="status"></div>
+
+    <script>
+        function log(message) {
+            document.getElementById('status').innerHTML += '<div>' + message + '</div>';
+            console.log(message);
+        }
+
+        async function clearCacheAndReload() {
+            log('🧹 Nettoyage du cache...');
+            
+            // Vider le cache du navigateur
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                for (const cacheName of cacheNames) {
+                    await caches.delete(cacheName);
+                    log('✅ Cache supprimé: ' + cacheName);
+                }
+            }
+            
+            // Vider le localStorage
+            localStorage.clear();
+            log('✅ localStorage vidé');
+            
+            // Vider le sessionStorage
+            sessionStorage.clear();
+            log('✅ sessionStorage vidé');
+            
+            // Attendre un peu
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            log('🔄 Rechargement de la page...');
+            window.location.reload(true);
+        }
+    </script>
+</body>
+</html>

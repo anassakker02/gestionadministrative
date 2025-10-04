@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Configuration API</title>
+</head>
+<body>
+    <h1>Test Configuration API</h1>
+    <button onclick="testConfig()">Test Configuration</button>
+    <button onclick="testProxy()">Test Proxy</button>
+    <button onclick="testDirect()">Test Direct</button>
+    <div id="results"></div>
+
+    <script type="module">
+        import axios from 'https://cdn.skypack.dev/axios';
+        
+        const results = document.getElementById('results');
+        
+        function log(message) {
+            results.innerHTML += '<div>' + message + '</div>';
+            console.log(message);
+        }
+
+        window.testConfig = function() {
+            log('🔍 Test de la configuration...');
+            
+            // Test 1: URL relative
+            log('1️⃣ Test URL relative...');
+            fetch('/gestionadminastration/us-central1/api/v1/health')
+                .then(r => r.json())
+                .then(data => log('✅ URL relative fonctionne: ' + JSON.stringify(data)))
+                .catch(e => log('❌ URL relative échouée: ' + e.message));
+            
+            // Test 2: Axios avec URL relative
+            log('2️⃣ Test Axios avec URL relative...');
+            axios.get('/gestionadminastration/us-central1/api/v1/health')
+                .then(r => log('✅ Axios URL relative fonctionne: ' + JSON.stringify(r.data)))
+                .catch(e => log('❌ Axios URL relative échouée: ' + e.message));
+        };
+
+        window.testProxy = function() {
+            log('🔍 Test du proxy...');
+            fetch('/gestionadminastration/us-central1/api/v1/health')
+                .then(r => {
+                    log('✅ Proxy fonctionne - Status: ' + r.status);
+                    return r.json();
+                })
+                .then(data => log('✅ Données reçues: ' + JSON.stringify(data)))
+                .catch(e => log('❌ Proxy échoué: ' + e.message));
+        };
+
+        window.testDirect = function() {
+            log('🔍 Test direct vers l\'émulateur...');
+            fetch('http://127.0.0.1:5001/gestionadminastration/us-central1/api/v1/health')
+                .then(r => {
+                    log('✅ Connexion directe fonctionne - Status: ' + r.status);
+                    return r.json();
+                })
+                .then(data => log('✅ Données reçues: ' + JSON.stringify(data)))
+                .catch(e => log('❌ Connexion directe échouée: ' + e.message));
+        };
+    </script>
+</body>
+</html>

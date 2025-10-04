@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { userService, User, LoginCredentials } from '@/services/userService';
-import { useToast } from '@/hooks/use-toast';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { userService, LoginCredentials } from "@/services/userService";
+import { User } from "@/types/user";
+import { useToast } from "@/hooks/use-toast";
+import { refreshAccessToken } from "@/lib/api"; // Import refreshAccessToken
 
 interface AuthContextType {
   user: User | null;
@@ -11,8 +13,13 @@ interface AuthContextType {
   isAuthenticated: boolean;
   hasRole: (role: string | string[]) => boolean;
   isAdmin: boolean;
+  isSubAdmin: boolean;
+  canManageUsers: boolean;
+  canCreateSubAdmin: boolean;
   isComptable: boolean;
   isEtudiant: boolean;
+  isParent: boolean;
+  isEnseignant: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,7 +27,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
@@ -36,19 +43,81 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Vérifier si un utilisateur est connecté au chargement
   useEffect(() => {
-    const checkAuth = () => {
+    const checkAuth = async () => {
       try {
-        const storedUser = localStorage.getItem('user');
-        const storedToken = localStorage.getItem('token');
-        
+        const storedUser = localStorage.getItem("user");
+        let storedToken = localStorage.getItem("token");
+        const storedRefreshToken = localStorage.getItem("refreshToken");
+
+        let isAuthenticatedFromStorage = false;
         if (storedUser && storedToken) {
           const userData = JSON.parse(storedUser);
+          
+          // Vérifier si le compte est actif
+          if (userData.isActive === false) {
+            console.log("❌ Compte inactif détecté, déconnexion automatique");
+            localStorage.removeItem("user");
+            localStorage.removeItem("token");
+            localStorage.removeItem("refreshToken");
+            setUser(null);
+            toast({
+              title: "Compte inactif",
+              description: "Votre compte a été désactivé. Veuillez contacter l'administrateur.",
+              variant: "destructive",
+            });
+            return;
+          }
+          
           setUser(userData);
+          isAuthenticatedFromStorage = true;
+        }
+
+        if (!isAuthenticatedFromStorage && storedRefreshToken) {
+          // If no valid token, but a refresh token exists, try to refresh
+          try {
+            storedToken = await refreshAccessToken();
+            // If refresh is successful, storedToken will be updated in localStorage
+          } catch (refreshError) {
+            console.error("Failed to refresh token on startup:", refreshError);
+            // Clear any invalid tokens to ensure a clean state for login
+            localStorage.removeItem("user");
+            localStorage.removeItem("token");
+            localStorage.removeItem("refreshToken");
+            // Optionally redirect to login, but the interceptor in api.ts might already handle this
+          }
+        }
+
+        // Skip /me call if we already have user data - this makes navigation much faster
+        if (!isAuthenticatedFromStorage && localStorage.getItem("token")) {
+          // Only try /me if we don't have user data and have a token
+          try {
+            const me = await userService.me();
+            if (me && me.user) {
+              setUser(me.user);
+              localStorage.setItem("user", JSON.stringify(me.user));
+            } else {
+              // If /me fails, clear tokens
+              localStorage.removeItem("user");
+              localStorage.removeItem("token");
+              localStorage.removeItem("refreshToken");
+            }
+          } catch (meError) {
+            // If /me fails and we don't have stored user data, clear tokens
+            if (!storedUser) {
+              localStorage.removeItem("user");
+              localStorage.removeItem("token");
+              localStorage.removeItem("refreshToken");
+            }
+          }
         }
       } catch (error) {
-        console.error('Erreur lors de la vérification de l\'authentification:', error);
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
+        console.error(
+          "Erreur lors de la vérification de l'authentification:",
+          error
+        );
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
+        localStorage.removeItem("refreshToken");
       } finally {
         setLoading(false);
       }
@@ -61,21 +130,57 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setLoading(true);
       const response = await userService.login(credentials);
-      
+
       if (response.status && response.user) {
         const userData = response.user;
-        setUser(userData);
-        localStorage.setItem('user', JSON.stringify(userData));
         
-        if (response.token) {
-          localStorage.setItem('token', response.token);
+        // Debug: Afficher les informations de l'utilisateur
+        console.log("User login data:", {
+          id: userData.id,
+          email: userData.email,
+          role: userData.role,
+          isActive: userData.isActive
+        });
+
+        // Gérer le cas où isActive est undefined (par défaut, considérer comme actif)
+        // Mais seulement si le backend ne retourne pas ce champ
+        if (userData.isActive === undefined) {
+          console.log("isActive is undefined, setting to true by default (backend compatibility)");
+          userData.isActive = true;
         }
-        
+
+        // Vérifier si le compte est explicitement désactivé (isActive: false)
+        if (userData.isActive === false && userData.role !== 'admin') {
+          console.log("Account explicitly deactivated for non-admin user:", userData.role);
+          toast({
+            title: "Compte désactivé",
+            description: "Votre compte a été désactivé. Veuillez contacter un administrateur.",
+            variant: "destructive",
+          });
+          return false;
+        }
+
+        // Pour les admins, forcer isActive à true si ce n'est pas déjà le cas
+        if (userData.role === 'admin' && !userData.isActive) {
+          console.log("Admin account marked as inactive, forcing activation");
+          userData.isActive = true;
+        }
+
+        setUser(userData);
+        localStorage.setItem("user", JSON.stringify(userData));
+
+        if (response.token) {
+          localStorage.setItem("token", response.token);
+        }
+        if (response.refreshToken) {
+          localStorage.setItem("refreshToken", response.refreshToken);
+        }
+
         toast({
           title: "Connexion réussie",
           description: `Bienvenue ${userData.prenom} ${userData.nom}`,
         });
-        
+
         return true;
       } else {
         toast({
@@ -85,11 +190,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         });
         return false;
       }
-    } catch (error) {
-      console.error('Erreur lors de la connexion:', error);
+    } catch (error: any) {
+      console.error("Erreur lors de la connexion:", error);
+      
+      // Gérer spécifiquement le cas d'un compte inactif
+      if (error.response?.data?.code === "ACCOUNT_INACTIVE") {
+        toast({
+          title: "Compte désactivé",
+          description: error.response.data.message || "Votre compte a été désactivé. Veuillez contacter l'administrateur.",
+          variant: "destructive",
+        });
+        return false;
+      }
+      
+      // Gérer les autres erreurs de connexion
       toast({
         title: "Erreur de connexion",
-        description: "Impossible de se connecter au serveur",
+        description: error.response?.data?.message || "Impossible de se connecter au serveur",
         variant: "destructive",
       });
       return false;
@@ -100,8 +217,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    localStorage.removeItem("refreshToken"); // Remove refresh token on logout
     toast({
       title: "Déconnexion",
       description: "Vous avez été déconnecté avec succès",
@@ -112,12 +230,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (user) {
       const updatedUser = { ...user, ...userData };
       setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      localStorage.setItem("user", JSON.stringify(updatedUser));
     }
   };
 
   const hasRole = (role: string | string[]): boolean => {
-    if (!user) return false;
+    if (!user || !user.role) return false;
     if (Array.isArray(role)) {
       return role.includes(user.role);
     }
@@ -125,9 +243,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const isAuthenticated = !!user;
-  const isAdmin = hasRole('admin');
-  const isComptable = hasRole(['admin', 'comptable']);
-  const isEtudiant = hasRole('etudiant');
+  const isAdmin = hasRole("admin");
+  const isSubAdmin = hasRole("sous-admin");
+  const canManageUsers = hasRole(["admin", "sous-admin"]);
+  const canCreateSubAdmin = hasRole("admin"); // Seul l'admin principal peut créer des sous-admins
+  const isComptable = hasRole("comptable");
+  const isEtudiant = hasRole("etudiant");
+  const isParent = hasRole("parent");
+  const isEnseignant = hasRole("enseignant");
 
   const value: AuthContextType = {
     user,
@@ -138,13 +261,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAuthenticated,
     hasRole,
     isAdmin,
+    isSubAdmin,
+    canManageUsers,
+    canCreateSubAdmin,
     isComptable,
     isEtudiant,
+    isParent,
+    isEnseignant,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

@@ -17,20 +17,27 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
+  FileText,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { fetcher } from "@/lib/api";
+import axios from "axios";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next"; // Import useTranslation
+import { useAuth } from "@/contexts/AuthContext";
+import AdminDashboard from "@/components/AdminDashboard";
 
 interface DashboardStats {
   totalStudents: string;
   pendingPayments: string;
   monthlyRevenue: string;
   unpaidInvoices: string;
+  totalPayments: string;
+  totalInvoices: string;
 }
 
 interface Activity {
-  type: "payment" | "student" | "reminder" | "invoice";
+  type: string; // Adjusted to string to accommodate more types
   message: string;
   time: string;
 }
@@ -79,6 +86,9 @@ interface DashboardData {
 // ]
 
 export default function Dashboard() {
+  const { t } = useTranslation(); // Initialize useTranslation
+  const { canManageUsers } = useAuth(); // Get role-based permissions
+
   // Récupérer l'utilisateur connecté
   const [userId, setUserId] = useState<string>("");
   useEffect(() => {
@@ -90,7 +100,7 @@ export default function Dashboard() {
   const { data: facturesData } = useQuery({
     queryKey: ["factures", userId],
     queryFn: () => fetcher(`/factures?etudiant_id=${userId}&status=non-payee`),
-    enabled: !!userId,
+    enabled: !!userId && !canManageUsers,
   });
   const totalUnpaid = facturesData?.data?.length || 0;
 
@@ -98,7 +108,7 @@ export default function Dashboard() {
   const { data: paiementsData } = useQuery({
     queryKey: ["paiements", userId],
     queryFn: () => fetcher(`/paiements?etudiant_id=${userId}&status=attente`),
-    enabled: !!userId,
+    enabled: !!userId && !canManageUsers,
   });
   const totalPendingPayments = paiementsData?.data?.length || 0;
 
@@ -106,46 +116,73 @@ export default function Dashboard() {
   const { data: activitiesData } = useQuery({
     queryKey: ["activities", userId],
     queryFn: () => fetcher(`/activites?etudiant_id=${userId}`),
-    enabled: !!userId,
+    enabled: !!userId && !canManageUsers,
   });
   const recentActivities = activitiesData?.data || [];
 
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["dashboardData"],
     queryFn: () => fetcher("/dashboard"),
+    enabled: !canManageUsers,
   });
+
+  // Si l'utilisateur peut gérer les utilisateurs, afficher le dashboard admin
+  if (canManageUsers) {
+    return <AdminDashboard />;
+  }
+
+  const handleExportCsv = async () => {
+    try {
+      const response = await axios.get("/dashboard/export/students/csv", {
+        responseType: "blob", // Important for downloading files
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `students_export_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (exportError) {
+      console.error("Erreur lors de l'exportation CSV:", exportError);
+      // Handle error, e.g., show a toast notification
+    }
+  };
 
   if (isLoading) return <div>Chargement du tableau de bord...</div>;
   if (error) return <div>Erreur lors du chargement: {error.message}</div>;
 
   const statsData = [
     {
+      title: "Total Étudiants",
+      value: data?.stats?.totalStudents ?? "0",
+      icon: GraduationCap,
+      color: "text-primary",
+    },
+    {
+      title: "Total Paiements",
+      value: data?.stats?.totalPayments ?? "€0",
+      icon: DollarSign,
+      color: "text-success",
+    },
+    {
+      title: "Revenus ce mois",
+      value: data?.stats?.monthlyRevenue ?? "€0",
+      icon: TrendingUp,
+      color: "text-success",
+    },
+    {
       title: "Factures impayées",
-      value: totalUnpaid,
-      change: "",
+      value: data?.stats?.unpaidInvoices ?? "0",
       icon: AlertCircle,
       color: "text-destructive",
     },
     {
       title: "Paiements en attente",
-      value: totalPendingPayments,
-      change: "",
+      value: data?.stats?.pendingPayments ?? "€0",
       icon: Clock,
       color: "text-warning",
-    },
-    {
-      title: "Total Étudiants",
-      value: data?.stats?.totalStudents ?? "0",
-      change: "+0%", // Placeholder, assuming backend doesn't provide this yet
-      icon: GraduationCap,
-      color: "text-primary",
-    },
-    {
-      title: "Revenus ce mois",
-      value: data?.stats?.monthlyRevenue ?? "€0",
-      change: "+0%", // Placeholder
-      icon: TrendingUp,
-      color: "text-success",
     },
   ];
 
@@ -157,11 +194,9 @@ export default function Dashboard() {
         transition={{ duration: 0.5 }}
       >
         <h1 className="text-3xl font-bold text-foreground mb-2">
-          Tableau de bord
+          {t("dashboard.title")}
         </h1>
-        <p className="text-muted-foreground">
-          Vue d'overview de votre système de gestion scolaire
-        </p>
+        <p className="text-muted-foreground">{t("dashboard.overview")}</p>
       </motion.div>
 
       {/* Stats Cards */}
@@ -181,7 +216,7 @@ export default function Dashboard() {
             <Card className="hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  {stat.title}
+                  {t(stat.title.toLowerCase().replace(/\s/g, "_"))}
                 </CardTitle>
                 <stat.icon className={`h-4 w-4 ${stat.color}`} />
               </CardHeader>
@@ -202,28 +237,25 @@ export default function Dashboard() {
         >
           <Card>
             <CardHeader>
-              <CardTitle>Actions rapides</CardTitle>
-              <CardDescription>
-                Accès rapide aux tâches fréquentes
-              </CardDescription>
+              <CardTitle>{t("dashboard.quick_actions")}</CardTitle>
+              <CardDescription>{t("dashboard.frequent_tasks")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {totalUnpaid > 0 && (
-                <Button
-                  className="w-full justify-start bg-gradient-primary hover:opacity-90"
-                  onClick={() => (window.location.href = "/factures")}
-                >
-                  <AlertCircle className="mr-2 h-4 w-4" />
-                  Payer mes factures ({totalUnpaid})
-                </Button>
-              )}
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={handleExportCsv}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                {t("dashboard.export_students_csv")}
+              </Button>
               <Button
                 variant="outline"
                 className="w-full justify-start"
                 onClick={() => (window.location.href = "/profile")}
               >
                 <CreditCard className="mr-2 h-4 w-4" />
-                Modifier mon profil
+                {t("dashboard.edit_profile")}
               </Button>
             </CardContent>
           </Card>
@@ -237,13 +269,11 @@ export default function Dashboard() {
         >
           <Card>
             <CardHeader>
-              <CardTitle>Activité récente</CardTitle>
-              <CardDescription>
-                Dernières actions sur le système
-              </CardDescription>
+              <CardTitle>{t("dashboard.recent_activity")}</CardTitle>
+              <CardDescription>{t("dashboard.latest_actions")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {recentActivities.map((activity: any, index: number) => (
+              {data?.recentActivities.map((activity, index) => (
                 <motion.div
                   key={index}
                   initial={{ opacity: 0, y: 10 }}
@@ -252,12 +282,18 @@ export default function Dashboard() {
                   className="flex items-start space-x-4 p-3 rounded-lg hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex-shrink-0">
-                    {/* Icônes selon le type d'activité */}
                     {activity.type === "payment" && (
                       <CheckCircle className="h-4 w-4 text-success" />
                     )}
                     {activity.type === "invoice" && (
                       <AlertCircle className="h-4 w-4 text-warning" />
+                    )}
+                    {(activity.type === "student" ||
+                      activity.type === "user") && (
+                      <Users className="h-4 w-4 text-blue-500" />
+                    )}
+                    {activity.type === "reminder" && (
+                      <Clock className="h-4 w-4 text-gray-500" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">

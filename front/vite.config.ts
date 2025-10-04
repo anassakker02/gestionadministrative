@@ -8,19 +8,32 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    // Configuration pour le routage SPA (Single Page Application)
+    historyApiFallback: true,
     proxy: {
-      '/frais-gestionScolaire/us-central1/api/v1': {
-        target: 'http://127.0.0.1:5001',
+      // Proxy les appels API vers l'émulateur Firebase Functions
+      "/gestionadminastration": {
+        target: "http://127.0.0.1:5001",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/frais-gestionScolaire\/us-central1\/api\/v1/, ''),
+        secure: false,
+        ws: true,
+        configure: (proxy, options) => {
+          proxy.on('error', (err, req, res) => {
+            console.log('❌ Proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('🚀 Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            console.log('✅ Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
       },
     },
   },
-  plugins: [
-    react(),
-    mode === 'development' &&
-    componentTagger(),
-  ].filter(Boolean),
+  plugins: [react(), mode === "development" && componentTagger()].filter(
+    Boolean
+  ),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

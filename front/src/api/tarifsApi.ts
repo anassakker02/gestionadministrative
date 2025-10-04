@@ -1,31 +1,35 @@
-import axios from "axios";
+import { apiRequest } from "@/lib/api";
 
 export interface Tarif {
   id?: string;
   nom: string;
   montant: number;
-  // Ajoutez d'autres champs si nécessaire
+  annee_scolaire: string;
+  nationalite?: string | null;
+  reductions: string[];
+  type: "Scolarité" | "Autres frais" | "Cantine" | string;
+  isActive: boolean;
+  endDate?: string | null;
+  [key: string]: unknown;
 }
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:5001/gestionadminastration/us-central1/api/v1";
-
 export const getTarifs = async () => {
-  const { data } = await axios.get(`${API_URL}/tarifs`);
-  return data;
+  return await apiRequest("/tarifs", "GET");
 };
 
 export const createTarif = async (tarif: Tarif) => {
-  const { data } = await axios.post(`${API_URL}/tarifs`, tarif);
-  return data;
+  return await apiRequest("/tarifs", "POST", tarif);
 };
 
 export const updateTarif = async (id: string, tarif: Tarif) => {
-  const { data } = await axios.put(`${API_URL}/tarifs/${id}`, tarif);
-  return data;
+  return await apiRequest(`/tarifs/${id}`, "PUT", tarif);
 };
 
 export const deleteTarif = async (id: string) => {
-  const { data } = await axios.delete(`${API_URL}/tarifs/${id}`);
-  return data;
+  return await apiRequest(`/tarifs/${id}`, "DELETE");
 };
 
+export const calculateStudentFees = async (etudiantId: string, anneeScolaire?: string) => {
+  const params = anneeScolaire ? `?annee_scolaire=${anneeScolaire}` : "";
+  return await apiRequest(`/tarifs/calculate/${etudiantId}${params}`, "GET");
+};

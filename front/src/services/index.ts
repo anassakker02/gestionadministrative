@@ -1,0 +1,19 @@
+// Export all services
+export { userService } from './userService';
+export { studentService } from './studentService';
+export { parentService } from './parentService';
+export { classService } from './classService';
+export { paymentService } from './paymentService';
+export { factureService } from './factureService';
+export { tarifService } from './tarifService';
+export { bourseService } from './bourseService';
+export { activityService } from './activityService';
+export { fraisPonctuelService } from './fraisPonctuelService';
+export { echeancierService } from './echeancierService';
+export { relanceService } from './relanceService';
+export { paymentPlanService } from './paymentPlanService';
+export { dashboardService } from './dashboardService';
+export { uploadService } from './uploadService';
+export { webhookService } from './webhookService';
+export { backupService } from './backupService';
+export { smsService } from './smsService';

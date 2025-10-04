@@ -1,4 +1,4 @@
-import axios from "axios";
+import { apiRequest } from "@/lib/api";
 
 export interface Etudiant {
   id?: string;
@@ -8,40 +8,45 @@ export interface Etudiant {
   classe_id: string;
   nationalite: string;
   bourse_id?: string;
+  frais_payment?: number; // Montant total des frais avec réduction de bourse
   // Add other fields as necessary
+  [key: string]: unknown;
 }
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://127.0.0.1:5001/gestionadminastration/us-central1/api/v1";
-
 export const createEtudiant = async (etudiant: Etudiant) => {
-  const { data } = await axios.post(`${API_URL}/etudiants`, etudiant);
-  return data;
+  return await apiRequest("/etudiants", "POST", etudiant);
 };
 
 export const getEtudiants = async () => {
-  const { data } = await axios.get(`${API_URL}/etudiants`);
-  return data;
+  return await apiRequest("/etudiants", "GET");
 };
 
 export const deleteEtudiant = async (id: string) => {
-  const { data } = await axios.delete(`${API_URL}/etudiants/${id}`);
-  return data;
+  return await apiRequest(`/etudiants/${id}`, "DELETE");
 };
 
-export const updateEtudiant = async (id: string, etudiant: Partial<Etudiant>) => {
-  const { data } = await axios.put(`${API_URL}/etudiants/${id}`, etudiant);
-  return data;
+export const updateEtudiant = async (
+  id: string,
+  etudiant: Partial<Etudiant>
+) => {
+  return await apiRequest(`/etudiants/${id}`, "PUT", etudiant);
+};
+
+export const getEtudiantById = async (id: string) => {
+  return await apiRequest(`/etudiants/${id}`, "GET");
 };
 
 export const getClassesForStudentForm = async () => {
-  const { data } = await axios.get(`${API_URL}/classes`);
+  const response = await apiRequest("/classes", "GET");
   // Assuming backend returns { status: true, data: [...] }
-  return data.data || [];
+  return response.data || [];
 };
 
 export const getBoursesForStudentForm = async () => {
-    const { data } = await axios.get(`${API_URL}/bourses`);
-    return data.data || [];
+  const response = await apiRequest("/bourses", "GET");
+  return response.data || [];
+};
+
+export const recalculateStudentFees = async () => {
+  return await apiRequest("/etudiants/recalculate-fees", "POST");
 };

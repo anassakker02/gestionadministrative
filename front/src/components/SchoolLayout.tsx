@@ -1,7 +1,9 @@
 import { ReactNode } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SchoolSidebar } from "./SchoolSidebar";
+import { NotificationDropdown } from "./NotificationDropdown";
 import { motion } from "framer-motion";
+import { Outlet } from "react-router-dom";
 
 interface SchoolLayoutProps {
   children: ReactNode;
@@ -13,7 +15,7 @@ export function SchoolLayout({ children }: SchoolLayoutProps) {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-secondary">
-        <SchoolSidebar userRole={user?.role} />
+        <SchoolSidebar />
 
         <div className="flex-1 flex flex-col">
           <motion.header
@@ -29,6 +31,11 @@ export function SchoolLayout({ children }: SchoolLayoutProps) {
               </h1>
             </div>
             <div className="flex items-center space-x-4">
+              {/* Notifications pour les admins et comptables */}
+              {user && (user.role === 'admin' || user.role === 'comptable') && (
+                <NotificationDropdown />
+              )}
+              
               {/* Affichage du nom, prénom et rôle */}
               {(() => {
                 if (user) {

@@ -120,17 +120,23 @@ app.use("/echeanciers", authenticate, authorize(["admin", "sous-admin"]), echean
 app.use(
   "/etudiants",
   authenticate,
-  authorize(["admin", "sous-admin", "etudiant"]),
+  authorize(["admin", "sous-admin", "etudiant", "parent"]),
   etudiantsHandler
 );
 
-// Routes du portail étudiant - accessibles aux étudiants et parents
+// Routes du portail étudiant - accessibles aux étudiants, parents, admin, sous-admin et comptable
 app.use(
   "/student-portal",
   authenticate,
-  authorize(["etudiant", "parent"]),
+  authorize(["etudiant", "parent", "admin", "sous-admin", "comptable"]),
   etudiantsHandler
 );
+
+// Routes directes du portail étudiant pour éviter les problèmes de montage
+const studentPortalController = require("./etudiants/controllers/studentPortal");
+app.get("/student-portal/portal/dashboard", authenticate, authorize(["etudiant", "parent", "admin", "sous-admin", "comptable"]), studentPortalController.getStudentDashboard.bind(studentPortalController));
+app.get("/student-portal/portal/payments", authenticate, authorize(["etudiant", "parent", "admin", "sous-admin", "comptable"]), studentPortalController.getStudentPayments.bind(studentPortalController));
+app.get("/student-portal/portal/invoices", authenticate, authorize(["etudiant", "parent", "admin", "sous-admin", "comptable"]), studentPortalController.getStudentInvoices.bind(studentPortalController));
 app.use(
   "/factures",
   authenticate,
@@ -157,14 +163,14 @@ app.use(
   authorize(["admin", "sous-admin", "comptable"]),
   tarifsHandler
 );
-app.use("/users", authenticate, authorize(["admin", "sous-admin", "etudiant"]), usersHandler);
+app.use("/users", authenticate, authorize(["admin", "sous-admin", "etudiant", "parent"]), usersHandler);
 
 app.use("/auth", authHandler);
 app.use("/dashboard", authenticate, authorize(["admin", "sous-admin"]), dashboardHandler);
 app.use(
   "/parents",
   authenticate,
-  authorize(["admin", "sous-admin"]),
+  authorize(["admin", "sous-admin", "parent"]),
   parentsHandler
 );
 app.use("/upload", authenticate, authorize(["admin", "sous-admin"]), uploadHandler);

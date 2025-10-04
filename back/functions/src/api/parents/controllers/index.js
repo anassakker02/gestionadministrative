@@ -277,7 +277,33 @@ class ParentController {
 
   async getAll(req, res) {
     try {
-      const snapshot = await this.collection.get();
+      const { user_id } = req.query;
+      const userRole = req.user.role;
+      const userId = req.user.id;
+      
+      let snapshot;
+      if (user_id) {
+        // Vérifier que l'utilisateur peut accéder à ces données
+        if (userRole === 'parent' && user_id !== userId) {
+          return res.status(403).json({
+            status: false,
+            message: "Non autorisé à accéder aux données d'autres parents"
+          });
+        }
+        // Filtrer par user_id si fourni
+        snapshot = await this.collection.where('user_id', '==', user_id).get();
+      } else {
+        // Seuls les admin et sous-admin peuvent voir tous les parents
+        if (userRole === 'parent') {
+          return res.status(403).json({
+            status: false,
+            message: "Non autorisé à voir tous les parents"
+          });
+        }
+        // Récupérer tous les parents
+        snapshot = await this.collection.get();
+      }
+      
       const parents = snapshot.docs.map((doc) => {
         const parentData = doc.data();
         if (parentData.email) parentData.email = decrypt(parentData.email);
@@ -460,6 +486,15 @@ class ParentController {
         etudiant_id: studentId,
         updatedAt: new Date()
       });
+
+      // Mettre à jour l'utilisateur parent avec l'ID de l'étudiant
+      if (parentData.user_id) {
+        await db.collection("users").doc(parentData.user_id).update({
+          etudiant_id: studentId,
+          updatedAt: new Date()
+        });
+        console.log(`✅ Utilisateur parent mis à jour avec etudiant_id: ${studentId}`);
+      }
 
       // Mettre à jour l'étudiant avec l'ID du parent (gestion des tableaux)
       let parentIds = [];

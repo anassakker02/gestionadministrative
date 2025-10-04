@@ -172,7 +172,8 @@ class UsersController {
       // Vérifier que l'utilisateur connecté peut voir les utilisateurs
       if (
         !req.user ||
-        !["admin", "sous-admin", "comptable"].includes(req.user.role)
+        (!["admin", "sous-admin", "comptable"].includes(req.user.role) && 
+         req.user.id !== req.params.id)
       ) {
         return res.status(403).json({
           message: "Non autorisé à voir les utilisateurs",
@@ -878,8 +879,8 @@ class UsersController {
         });
       }
 
-      // Autoriser admin, sous-admin et étudiants
-      const allowedRoles = ["admin", "sous-admin", "etudiant"];
+      // Autoriser admin, sous-admin, étudiants et parents
+      const allowedRoles = ["admin", "sous-admin", "etudiant", "parent"];
       if (!allowedRoles.includes(req.user.role)) {
         return res.status(403).json({
           status: false,

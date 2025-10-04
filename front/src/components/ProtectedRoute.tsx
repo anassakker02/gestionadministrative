@@ -16,7 +16,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const { isAuthenticated, hasRole, loading, user } = useAuth();
   const location = useLocation();
 
-  // Afficher un loader pendant la vérification
+  // Afficher un loader pendant la vérification (mais seulement si vraiment en cours de chargement)
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-secondary">
@@ -35,7 +35,15 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Vérifier les rôles si spécifiés
   if (roles && !hasRole(roles)) {
-    return <Navigate to="/dashboard" replace />;
+    // Redirection intelligente basée sur le rôle de l'utilisateur
+    const userRole = user.role;
+    let redirectPath = '/dashboard';
+    
+    if (userRole === 'etudiant' || userRole === 'parent') {
+      redirectPath = '/portal';
+    }
+    
+    return <Navigate to={redirectPath} replace />;
   }
 
   return <>{children}</>;

@@ -1,15 +1,5 @@
 import { apiRequest } from "@/lib/api";
-
-export interface User {
-  id: string;
-  nom: string;
-  prenom: string;
-  email: string;
-  role: "etudiant" | "comptable" | "admin";
-  telephone?: string;
-  classe_id?: string;
-  status?: string;
-}
+import { User } from "@/types/user";
 
 export interface LoginCredentials {
   email: string;
@@ -23,7 +13,21 @@ export interface RegisterData {
   password: string;
   role?: string;
   telephone?: string;
-  classe_id?: string;
+  adresse?: string;
+}
+
+export interface SubAdminData {
+  nom: string;
+  prenom: string;
+  email: string;
+  password: string;
+  telephone?: string;
+  adresse?: string;
+}
+
+export interface RoleAssignmentData {
+  role: string;
+  additionalData?: Record<string, unknown>;
 }
 
 export const userService = {
@@ -48,13 +52,77 @@ export const userService = {
     return await apiRequest("/auth/logout", "POST");
   },
 
-  // Gestion profil
+  // Session courante
+  me: async () => {
+    return await apiRequest("/auth/me", "GET");
+  },
+
+  // Gestion hiérarchique admin/sous-admin
+  createSubAdmin: async (data: SubAdminData) => {
+    return await apiRequest(
+      "/auth/create-sub-admin",
+      "POST",
+      data as unknown as Record<string, unknown>
+    );
+  },
+
+  assignRole: async (userId: string, role: string) => {
+    return await apiRequest(`/auth/assign-role/${userId}`, "POST", {
+      role,
+    } as unknown as Record<string, unknown>);
+  },
+
+  // Gestion utilisateurs
+  getAllUsers: async (params?: { status?: string; role?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append("status", params.status);
+    if (params?.role) queryParams.append("role", params.role);
+
+    const queryString = queryParams.toString();
+    const url = queryString ? `/users?${queryString}` : "/users";
+    return await apiRequest(url, "GET");
+  },
+
+  getPendingUsers: async () => {
+    return await apiRequest("/users/pending", "GET");
+  },
+
+  getAvailableForStudent: async () => {
+    return await apiRequest("/users/available-for-student", "GET");
+  },
+
   getProfile: async (userId: string) => {
     return await apiRequest(`/users/${userId}`, "GET");
   },
 
   updateProfile: async (userId: string, data: Partial<User>) => {
     return await apiRequest(`/users/${userId}`, "PUT", data);
+  },
+
+  deleteUser: async (userId: string) => {
+    return await apiRequest(`/users/${userId}`, "DELETE");
+  },
+
+  activateUser: async (userId: string) => {
+    // Backend uses PATCH for activation
+    return await apiRequest(`/users/${userId}/activate`, "PATCH");
+  },
+
+  deactivateUser: async (userId: string) => {
+    // Backend uses PATCH for deactivation (soft)
+    return await apiRequest(`/users/${userId}/deactivate`, "PATCH");
+  },
+
+  // Préférences de notification (email/SMS)
+  updateNotificationPreferences: async (
+    userId: string,
+    prefs: { emailNotifications?: boolean; smsNotifications?: boolean }
+  ) => {
+    return await apiRequest(
+      `/users/${userId}/preferences`,
+      "PATCH",
+      prefs as Record<string, unknown>
+    );
   },
 
   changePassword: async (
@@ -64,21 +132,7 @@ export const userService = {
     return await apiRequest(`/users/${userId}/password`, "PUT", passwords);
   },
 
-  // Gestion utilisateurs (admin)
-  getAllUsers: async () => {
-    return await apiRequest("/users", "GET");
-  },
-
-  deleteUser: async (userId: string) => {
-    return await apiRequest(`/users/${userId}`, "DELETE");
+  getAvailableClasses: async () => {
+    return await apiRequest("/users/available-classes", "GET");
   },
 };
-
-export async function blockUser(userId: string, blocked: boolean) {
-  // Exemple d'appel API, à adapter selon votre backend
-  return fetch(`/api/users/${userId}/block`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ blocked }),
-  }).then((res) => res.json());
-}
