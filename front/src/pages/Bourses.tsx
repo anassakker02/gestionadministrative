@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { 
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -39,9 +39,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import CreateBourseModal from '@/components/CreateBourseModal';
-import { useNavigate } from 'react-router-dom';
-import { getAllBourses, createBourse, updateBourse, deleteBourse, Bourse } from '@/api/boursesApi';
+import CreateBourseModal from "@/components/CreateBourseModal";
+import { useNavigate } from "react-router-dom";
+import {
+  getAllBourses,
+  createBourse,
+  updateBourse,
+  deleteBourse,
+  Bourse,
+} from "@/api/boursesApi";
 
 interface BourseAssignment {
   bourseId: string;
@@ -49,8 +55,8 @@ interface BourseAssignment {
 }
 
 const Bourses = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedBourse, setSelectedBourse] = useState<Bourse | null>(null);
   const [bourseToDelete, setBourseToDelete] = useState<Bourse | null>(null);
@@ -61,24 +67,29 @@ const Bourses = () => {
 
   // Récupérer les bourses depuis l'API backend
   const { data: bourses = [], isLoading } = useQuery<Bourse[]>({
-    queryKey: ['bourses'],
+    queryKey: ["bourses"],
     queryFn: getAllBourses,
   });
 
-  const filteredBourses = bourses.filter(bourse => {
-    const matchesSearch = bourse.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (bourse.description && bourse.description.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesStatus = statusFilter === 'all' || bourse.status === statusFilter;
+  const filteredBourses = bourses.filter((bourse) => {
+    const matchesSearch =
+      bourse.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (bourse.description &&
+        bourse.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesStatus =
+      statusFilter === "all" || bourse.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const getStatusBadge = (status?: string) => {
     switch (status) {
-      case 'active':
-        return <Badge className="bg-success text-success-foreground">Active</Badge>;
-      case 'inactive':
+      case "active":
+        return (
+          <Badge className="bg-success text-success-foreground">Active</Badge>
+        );
+      case "inactive":
         return <Badge variant="secondary">Inactive</Badge>;
-      case 'expire':
+      case "expire":
         return <Badge variant="destructive">Expirée</Badge>;
       default:
         return <Badge variant="outline">Inconnu</Badge>;
@@ -99,7 +110,7 @@ const Bourses = () => {
   const createBourseMutation = useMutation({
     mutationFn: createBourse,
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['bourses'] });
+      queryClient.invalidateQueries({ queryKey: ["bourses"] });
       toast({
         title: "Bourse créée",
         description: `La bourse "${data.nom}" a été ajoutée avec succès.`,
@@ -117,9 +128,10 @@ const Bourses = () => {
 
   // Mutation pour mettre à jour une bourse
   const updateBourseMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Bourse> }) => updateBourse(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<Bourse> }) =>
+      updateBourse(id, data),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['bourses'] });
+      queryClient.invalidateQueries({ queryKey: ["bourses"] });
       toast({
         title: "Bourse modifiée",
         description: `La bourse "${data.nom}" a été modifiée avec succès.`,
@@ -129,7 +141,8 @@ const Bourses = () => {
     onError: (error: any) => {
       toast({
         title: "Erreur",
-        description: error.message || "Erreur lors de la modification de la bourse",
+        description:
+          error.message || "Erreur lors de la modification de la bourse",
         variant: "destructive",
       });
     },
@@ -139,7 +152,7 @@ const Bourses = () => {
   const deleteBourseMutation = useMutation({
     mutationFn: deleteBourse,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bourses'] });
+      queryClient.invalidateQueries({ queryKey: ["bourses"] });
       toast({
         title: "Bourse supprimée",
         description: "La bourse a été supprimée avec succès.",
@@ -148,24 +161,32 @@ const Bourses = () => {
     onError: (error: any) => {
       toast({
         title: "Erreur",
-        description: error.message || "Erreur lors de la suppression de la bourse",
+        description:
+          error.message || "Erreur lors de la suppression de la bourse",
         variant: "destructive",
       });
     },
   });
 
-  const handleAddBourse = (newBourseData: Omit<Bourse, 'id' | 'nombreBeneficiaires'>) => {
+  const handleAddBourse = (
+    newBourseData: Omit<Bourse, "id" | "nombreBeneficiaires">,
+  ) => {
     createBourseMutation.mutate(newBourseData);
   };
 
-  const handleUpdateBourse = (updatedBourseData: Omit<Bourse, 'nombreBeneficiaires'> & { id: string }) => {
+  const handleUpdateBourse = (
+    updatedBourseData: Omit<Bourse, "nombreBeneficiaires"> & { id: string },
+  ) => {
     const { id, ...data } = updatedBourseData;
     updateBourseMutation.mutate({ id, data });
   };
 
-  const handleViewDetails = useCallback((bourse: Bourse) => {
-    navigate(`/bourses/${bourse.id}`);
-  }, [navigate]);
+  const handleViewDetails = useCallback(
+    (bourse: Bourse) => {
+      navigate(`/bourses/${bourse.id}`);
+    },
+    [navigate],
+  );
 
   const handleDeleteClick = (bourse: Bourse) => {
     setBourseToDelete(bourse);
@@ -190,12 +211,18 @@ const Bourses = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Gestion des Bourses</h1>
-          <p className="text-sm md:text-base text-muted-foreground mt-1 md:mt-2">
-            Gérez les programmes de bourses et les aides financières pour les étudiants
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+            Gestion des Bourses
+          </h1>
+          <p className="text-xs md:text-base text-muted-foreground mt-1">
+            Gérez les programmes de bourses et les aides financières pour les
+            étudiants
           </p>
         </div>
-        <Button onClick={handleAddNew} className="bg-primary hover:bg-primary-hover w-full sm:w-auto">
+        <Button
+          onClick={handleAddNew}
+          className="bg-primary hover:bg-primary-hover w-full sm:w-auto"
+        >
           <Plus className="h-4 w-4 mr-2" />
           Nouvelle Bourse
         </Button>
@@ -246,23 +273,40 @@ const Bourses = () => {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="whitespace-nowrap">Nom</TableHead>
-                        <TableHead className="hidden md:table-cell">Description</TableHead>
-                        <TableHead className="text-center whitespace-nowrap">%</TableHead>
-                        <TableHead className="hidden lg:table-cell">Critères</TableHead>
-                        <TableHead className="text-center whitespace-nowrap">Bénéficiaires</TableHead>
-                        <TableHead className="text-center whitespace-nowrap">Statut</TableHead>
-                        <TableHead className="text-center whitespace-nowrap">Actions</TableHead>
+                        <TableHead className="hidden md:table-cell">
+                          Description
+                        </TableHead>
+                        <TableHead className="text-center whitespace-nowrap">
+                          %
+                        </TableHead>
+                        <TableHead className="hidden lg:table-cell">
+                          Critères
+                        </TableHead>
+                        <TableHead className="text-center whitespace-nowrap">
+                          Bénéficiaires
+                        </TableHead>
+                        <TableHead className="text-center whitespace-nowrap">
+                          Statut
+                        </TableHead>
+                        <TableHead className="text-center whitespace-nowrap">
+                          Actions
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredBourses.map((bourse) => (
                         <TableRow key={bourse.id}>
                           <TableCell className="font-medium align-top">
-                            <div className="font-semibold line-clamp-1 max-w-[180px]">{bourse.nom}</div>
+                            <div className="font-semibold line-clamp-1 max-w-[180px]">
+                              {bourse.nom}
+                            </div>
                           </TableCell>
                           <TableCell className="hidden md:table-cell align-top max-w-[220px]">
-                            <div className="truncate" title={bourse.description || ''}>
-                              {bourse.description || 'Aucune description'}
+                            <div
+                              className="truncate"
+                              title={bourse.description || ""}
+                            >
+                              {bourse.description || "Aucune description"}
                             </div>
                           </TableCell>
                           <TableCell className="text-center align-top">
@@ -271,12 +315,18 @@ const Bourses = () => {
                             </span>
                           </TableCell>
                           <TableCell className="hidden lg:table-cell align-top max-w-[260px]">
-                            <div className="truncate" title={bourse.criteres || ''}>
-                              {bourse.criteres || 'Aucun critère'}
+                            <div
+                              className="truncate"
+                              title={bourse.criteres || ""}
+                            >
+                              {bourse.criteres || "Aucun critère"}
                             </div>
                           </TableCell>
                           <TableCell className="text-center align-top">
-                            <Badge variant="outline" className="px-2 py-1 text-xs">
+                            <Badge
+                              variant="outline"
+                              className="px-2 py-1 text-xs"
+                            >
                               {bourse.nombreBeneficiaires || 0} étudiant(s)
                             </Badge>
                           </TableCell>
@@ -285,8 +335,8 @@ const Bourses = () => {
                           </TableCell>
                           <TableCell className="text-center align-top">
                             <div className="flex gap-2 justify-center">
-                              <Button 
-                                variant="outline" 
+                              <Button
+                                variant="outline"
                                 size="icon"
                                 onClick={() => handleViewDetails(bourse)}
                                 title="Voir les détails"
@@ -294,8 +344,8 @@ const Bourses = () => {
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              <Button 
-                                variant="outline" 
+                              <Button
+                                variant="outline"
                                 size="icon"
                                 onClick={() => handleEdit(bourse)}
                                 title="Modifier"
@@ -303,8 +353,8 @@ const Bourses = () => {
                               >
                                 <Edit className="h-4 w-4" />
                               </Button>
-                              <Button 
-                                variant="outline" 
+                              <Button
+                                variant="outline"
                                 size="icon"
                                 onClick={() => handleDeleteClick(bourse)}
                                 disabled={deleteBourseMutation.isPending}
@@ -339,24 +389,26 @@ const Bourses = () => {
                     <div className="flex-1">
                       <h3 className="font-semibold text-lg">{bourse.nom}</h3>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {bourse.description || 'Aucune description'}
+                        {bourse.description || "Aucune description"}
                       </p>
                     </div>
-                    <div className="ml-2">
-                      {getStatusBadge(bourse.status)}
-                    </div>
+                    <div className="ml-2">{getStatusBadge(bourse.status)}</div>
                   </div>
 
                   {/* Details */}
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <span className="text-muted-foreground">Pourcentage:</span>
+                      <span className="text-muted-foreground">
+                        Pourcentage:
+                      </span>
                       <div className="font-semibold text-primary">
                         {bourse.pourcentage_remise ?? 0}%
                       </div>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Bénéficiaires:</span>
+                      <span className="text-muted-foreground">
+                        Bénéficiaires:
+                      </span>
                       <div>
                         <Badge variant="outline" className="text-xs">
                           {bourse.nombreBeneficiaires || 0} étudiant(s)
@@ -375,8 +427,8 @@ const Bourses = () => {
 
                   {/* Actions */}
                   <div className="flex gap-2 pt-2 border-t">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => handleViewDetails(bourse)}
                       className="flex-1"
@@ -384,8 +436,8 @@ const Bourses = () => {
                       <Eye className="h-4 w-4 mr-2" />
                       Voir
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => handleEdit(bourse)}
                       className="flex-1"
@@ -393,8 +445,8 @@ const Bourses = () => {
                       <Edit className="h-4 w-4 mr-2" />
                       Modifier
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => handleDeleteClick(bourse)}
                       className="flex-1"
@@ -415,19 +467,19 @@ const Bourses = () => {
         </>
       )}
 
-
       {/* Add/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">
-              {selectedBourse ? 'Modifier la bourse' : 'Créer une nouvelle bourse'}
+              {selectedBourse
+                ? "Modifier la bourse"
+                : "Créer une nouvelle bourse"}
             </DialogTitle>
             <p className="text-xs text-muted-foreground">
-              {selectedBourse 
-                ? 'Modifiez les informations de la bourse sélectionnée.' 
-                : 'Remplissez les informations pour créer une nouvelle bourse.'
-              }
+              {selectedBourse
+                ? "Modifiez les informations de la bourse sélectionnée."
+                : "Remplissez les informations pour créer une nouvelle bourse."}
             </p>
           </DialogHeader>
           <CreateBourseModal
@@ -439,17 +491,22 @@ const Bourses = () => {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-lg font-semibold text-red-600">
               Confirmer la suppression
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-muted-foreground">
-              Êtes-vous sûr de vouloir supprimer la bourse <strong>"{bourseToDelete?.nom}"</strong> ?
+              Êtes-vous sûr de vouloir supprimer la bourse{" "}
+              <strong>"{bourseToDelete?.nom}"</strong> ?
               <br />
               <br />
-              Cette action est <strong>irréversible</strong> et supprimera définitivement :
+              Cette action est <strong>irréversible</strong> et supprimera
+              définitivement :
               <ul className="list-disc list-inside mt-2 space-y-1">
                 <li>Les informations de la bourse</li>
                 <li>Les critères d'éligibilité</li>
@@ -458,10 +515,7 @@ const Bourses = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
-            <AlertDialogCancel 
-              onClick={handleCancelDelete}
-              className="flex-1"
-            >
+            <AlertDialogCancel onClick={handleCancelDelete} className="flex-1">
               Annuler
             </AlertDialogCancel>
             <AlertDialogAction

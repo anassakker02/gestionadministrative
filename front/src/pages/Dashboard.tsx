@@ -25,6 +25,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next"; // Import useTranslation
 import { useAuth } from "@/contexts/AuthContext";
+import { Navigate } from "react-router-dom";
 import AdminDashboard from "@/components/AdminDashboard";
 
 interface DashboardStats {
@@ -87,12 +88,19 @@ interface DashboardData {
 
 export default function Dashboard() {
   const { t } = useTranslation(); // Initialize useTranslation
-  const { canManageUsers } = useAuth(); // Get role-based permissions
+  const { user, canManageUsers, isEtudiant, isParent, isComptable } = useAuth(); // Get role-based permissions
+  const [shouldRedirect, setShouldRedirect] = useState(false);
+
+  useEffect(() => {
+    if (isEtudiant || isParent) {
+      setShouldRedirect(true);
+    }
+  }, [isEtudiant, isParent]);
 
   // Récupérer l'utilisateur connecté
   const [userId, setUserId] = useState<string>("");
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const user = JSON.parse(sessionStorage.getItem("user") || "{}");
     setUserId(user.id || "");
   }, []);
 
@@ -100,7 +108,7 @@ export default function Dashboard() {
   const { data: facturesData } = useQuery({
     queryKey: ["factures", userId],
     queryFn: () => fetcher(`/factures?etudiant_id=${userId}&status=non-payee`),
-    enabled: !!userId && !canManageUsers,
+    enabled: !!userId && (isEtudiant || isParent),
   });
   const totalUnpaid = facturesData?.data?.length || 0;
 
@@ -108,7 +116,7 @@ export default function Dashboard() {
   const { data: paiementsData } = useQuery({
     queryKey: ["paiements", userId],
     queryFn: () => fetcher(`/paiements?etudiant_id=${userId}&status=attente`),
-    enabled: !!userId && !canManageUsers,
+    enabled: !!userId && (isEtudiant || isParent),
   });
   const totalPendingPayments = paiementsData?.data?.length || 0;
 
@@ -116,15 +124,19 @@ export default function Dashboard() {
   const { data: activitiesData } = useQuery({
     queryKey: ["activities", userId],
     queryFn: () => fetcher(`/activites?etudiant_id=${userId}`),
-    enabled: !!userId && !canManageUsers,
+    enabled: !!userId && (isEtudiant || isParent),
   });
   const recentActivities = activitiesData?.data || [];
 
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["dashboardData"],
     queryFn: () => fetcher("/dashboard"),
-    enabled: !canManageUsers,
+    enabled: canManageUsers || isComptable, // Fix: Also for comptable
   });
+
+  if (shouldRedirect) {
+    return <Navigate to="/portal" replace />;
+  }
 
   // Si l'utilisateur peut gérer les utilisateurs, afficher le dashboard admin
   if (canManageUsers) {
@@ -155,31 +167,31 @@ export default function Dashboard() {
 
   const statsData = [
     {
-      title: "Total Étudiants",
+      title: "dashboard.total_students",
       value: data?.stats?.totalStudents ?? "0",
       icon: GraduationCap,
       color: "text-primary",
     },
     {
-      title: "Total Paiements",
+      title: "dashboard.total_payments",
       value: data?.stats?.totalPayments ?? "€0",
       icon: DollarSign,
       color: "text-success",
     },
     {
-      title: "Revenus ce mois",
+      title: "dashboard.monthly_revenue",
       value: data?.stats?.monthlyRevenue ?? "€0",
       icon: TrendingUp,
       color: "text-success",
     },
     {
-      title: "Factures impayées",
+      title: "dashboard.unpaid_invoices",
       value: data?.stats?.unpaidInvoices ?? "0",
       icon: AlertCircle,
       color: "text-destructive",
     },
     {
-      title: "Paiements en attente",
+      title: "dashboard.pending_payments",
       value: data?.stats?.pendingPayments ?? "€0",
       icon: Clock,
       color: "text-warning",
@@ -204,7 +216,7 @@ export default function Dashboard() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6"
       >
         {statsData.map((stat, index) => (
           <motion.div
@@ -216,7 +228,7 @@ export default function Dashboard() {
             <Card className="hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  {t(stat.title.toLowerCase().replace(/\s/g, "_"))}
+                  {t(stat.title)}
                 </CardTitle>
                 <stat.icon className={`h-4 w-4 ${stat.color}`} />
               </CardHeader>

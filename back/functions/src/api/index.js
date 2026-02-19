@@ -5,11 +5,11 @@ const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const express = require("express");
 const { authenticate, authorize } = require("../middlewares/auth");
-const { 
-  performanceMonitor, 
-  timeoutMiddleware, 
-  memoryMonitor, 
-  firestoreMonitor 
+const {
+  performanceMonitor,
+  timeoutMiddleware,
+  memoryMonitor,
+  firestoreMonitor,
 } = require("../middlewares/performance");
 
 const boursesHandler = require("./bourses/routes");
@@ -79,49 +79,64 @@ app.get("/health", (req, res) => {
 // ✅ Endpoint de diagnostic avancé (PUBLIC)
 app.get("/diagnostic", async (req, res) => {
   try {
-    const { checkFirestoreHealth } = require('../utils/firestoreTimeout');
-    
+    const { checkFirestoreHealth } = require("../utils/firestoreTimeout");
+
     const memUsage = process.memoryUsage();
     const firestoreHealthy = await checkFirestoreHealth();
-    
+
     res.json({
       status: "diagnostic_complete",
       timestamp: new Date().toISOString(),
       system: {
         uptime: process.uptime(),
         memory: {
-          rss: Math.round(memUsage.rss / 1024 / 1024) + 'MB',
-          heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + 'MB',
-          heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + 'MB',
-          external: Math.round(memUsage.external / 1024 / 1024) + 'MB'
+          rss: Math.round(memUsage.rss / 1024 / 1024) + "MB",
+          heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + "MB",
+          heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + "MB",
+          external: Math.round(memUsage.external / 1024 / 1024) + "MB",
         },
         nodeVersion: process.version,
-        platform: process.platform
+        platform: process.platform,
       },
       firestore: {
         healthy: firestoreHealthy,
-        connection: firestoreHealthy ? 'OK' : 'ERROR'
+        connection: firestoreHealthy ? "OK" : "ERROR",
       },
-      warnings: []
+      warnings: [],
     });
   } catch (error) {
     res.status(500).json({
       status: "diagnostic_failed",
       error: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 });
 
-app.use("/bourses", authenticate, authorize(["admin", "sous-admin", "comptable"]), boursesHandler);
-app.use("/classes", authenticate, authorize(["admin", "sous-admin"]), classesHandler);
-app.use("/echeanciers", authenticate, authorize(["admin", "sous-admin"]), echeanciersHandler);
+app.use(
+  "/bourses",
+  authenticate,
+  authorize(["admin", "sous-admin", "comptable"]),
+  boursesHandler,
+);
+app.use(
+  "/classes",
+  authenticate,
+  authorize(["admin", "sous-admin"]),
+  classesHandler,
+);
+app.use(
+  "/echeanciers",
+  authenticate,
+  authorize(["admin", "sous-admin"]),
+  echeanciersHandler,
+);
 // Routes générales des étudiants - pour admin/sous-admin et étudiants
 app.use(
   "/etudiants",
   authenticate,
   authorize(["admin", "sous-admin", "etudiant", "parent"]),
-  etudiantsHandler
+  etudiantsHandler,
 );
 
 // Routes du portail étudiant - accessibles aux étudiants, parents, admin, sous-admin et comptable
@@ -129,54 +144,109 @@ app.use(
   "/student-portal",
   authenticate,
   authorize(["etudiant", "parent", "admin", "sous-admin", "comptable"]),
-  etudiantsHandler
+  etudiantsHandler,
 );
 
 // Routes directes du portail étudiant pour éviter les problèmes de montage
 const studentPortalController = require("./etudiants/controllers/studentPortal");
-app.get("/student-portal/portal/dashboard", authenticate, authorize(["etudiant", "parent", "admin", "sous-admin", "comptable"]), studentPortalController.getStudentDashboard.bind(studentPortalController));
-app.get("/student-portal/portal/payments", authenticate, authorize(["etudiant", "parent", "admin", "sous-admin", "comptable"]), studentPortalController.getStudentPayments.bind(studentPortalController));
-app.get("/student-portal/portal/invoices", authenticate, authorize(["etudiant", "parent", "admin", "sous-admin", "comptable"]), studentPortalController.getStudentInvoices.bind(studentPortalController));
+app.get(
+  "/student-portal/portal/dashboard",
+  authenticate,
+  authorize(["etudiant", "parent", "admin", "sous-admin", "comptable"]),
+  studentPortalController.getStudentDashboard.bind(studentPortalController),
+);
+app.get(
+  "/student-portal/portal/payments",
+  authenticate,
+  authorize(["etudiant", "parent", "admin", "sous-admin", "comptable"]),
+  studentPortalController.getStudentPayments.bind(studentPortalController),
+);
+app.get(
+  "/student-portal/portal/invoices",
+  authenticate,
+  authorize(["etudiant", "parent", "admin", "sous-admin", "comptable"]),
+  studentPortalController.getStudentInvoices.bind(studentPortalController),
+);
 app.use(
   "/factures",
   authenticate,
   authorize(["admin", "sous-admin", "comptable", "etudiant", "parent"]),
-  facturesHandler
+  facturesHandler,
 );
 app.use(
   "/fraisPonctuels",
   authenticate,
   authorize(["admin", "sous-admin"]),
-  fraisPonctuelsHandler
+  fraisPonctuelsHandler,
 );
 app.use(
   "/paiements",
   authenticate,
   authorize(["admin", "sous-admin", "comptable", "etudiant", "parent"]),
-  paiementsHandler
+  paiementsHandler,
 );
-app.use("/activites", authenticate, authorize(["admin", "sous-admin"]), activitesHandler);
-app.use("/relances", authenticate, authorize(["admin", "sous-admin"]), relancesHandler);
+app.use(
+  "/activites",
+  authenticate,
+  authorize(["admin", "sous-admin", "comptable", "etudiant", "parent"]),
+  activitesHandler,
+);
+app.use(
+  "/relances",
+  authenticate,
+  authorize(["admin", "sous-admin"]),
+  relancesHandler,
+);
 app.use(
   "/tarifs",
   authenticate,
   authorize(["admin", "sous-admin", "comptable"]),
-  tarifsHandler
+  tarifsHandler,
 );
-app.use("/users", authenticate, authorize(["admin", "sous-admin", "etudiant", "parent"]), usersHandler);
+app.use(
+  "/users",
+  authenticate,
+  authorize(["admin", "sous-admin", "etudiant", "parent"]),
+  usersHandler,
+);
 
 app.use("/auth", authHandler);
-app.use("/dashboard", authenticate, authorize(["admin", "sous-admin"]), dashboardHandler);
+app.use(
+  "/dashboard",
+  authenticate,
+  authorize(["admin", "sous-admin", "comptable"]),
+  dashboardHandler,
+);
 app.use(
   "/parents",
   authenticate,
   authorize(["admin", "sous-admin", "parent"]),
-  parentsHandler
+  parentsHandler,
 );
-app.use("/upload", authenticate, authorize(["admin", "sous-admin"]), uploadHandler);
-app.use("/webhooks", authenticate, authorize(["admin", "sous-admin"]), webhooksHandler);
-app.use("/backup", authenticate, authorize(["admin", "sous-admin"]), backupHandler);
-app.use("/payment-plans", authenticate, authorize(["admin", "sous-admin"]), paymentPlansHandler);
+app.use(
+  "/upload",
+  authenticate,
+  authorize(["admin", "sous-admin"]),
+  uploadHandler,
+);
+app.use(
+  "/webhooks",
+  authenticate,
+  authorize(["admin", "sous-admin"]),
+  webhooksHandler,
+);
+app.use(
+  "/backup",
+  authenticate,
+  authorize(["admin", "sous-admin"]),
+  backupHandler,
+);
+app.use(
+  "/payment-plans",
+  authenticate,
+  authorize(["admin", "sous-admin"]),
+  paymentPlansHandler,
+);
 
 // Serve Swagger UI
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));

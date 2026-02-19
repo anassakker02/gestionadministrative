@@ -352,7 +352,8 @@ class EtudiantController {
       const pageNumber = parseInt(page);
       const limitNumber = parseInt(limit);
 
-      let query = this.collection.orderBy("createdAt", "desc");
+      // Pas de orderBy pour éviter le besoin d'index Firestore composite
+      let query = this.collection;
 
       // Filtres
       if (classe_id) {
@@ -374,16 +375,23 @@ class EtudiantController {
       // Recherche par nom ou prénom
       if (search && search.trim()) {
         const searchTerm = search.trim();
-        // Note: Firestore ne supporte pas les recherches OR complexes
-        // On utilise une approche simple avec le nom
         query = query
+          .orderBy("nom")
           .where("nom", ">=", searchTerm)
           .where("nom", "<=", searchTerm + "\uf8ff");
       }
 
-      // Pagination
+      // Récupérer tous les docs puis trier/paginer en mémoire
+      const allSnapshot = await query.get();
+      const allDocs = allSnapshot.docs.sort((a, b) => {
+        const aDate = a.data().createdAt?.toMillis?.() || 0;
+        const bDate = b.data().createdAt?.toMillis?.() || 0;
+        return bDate - aDate; // desc
+      });
+      const total = allDocs.length;
       const offset = (pageNumber - 1) * limitNumber;
-      const snapshot = await query.limit(limitNumber).offset(offset).get();
+      const paginatedDocs = allDocs.slice(offset, offset + limitNumber);
+      const snapshot = { docs: paginatedDocs };
 
       const etudiants = [];
 
@@ -442,9 +450,7 @@ class EtudiantController {
         });
       }
 
-      // Compter le total des documents pour la pagination
-      const totalSnapshot = await this.collection.get();
-      const total = totalSnapshot.size;
+      // total est déjà calculé depuis allDocs.length
 
       return res.status(200).json({
         status: true,

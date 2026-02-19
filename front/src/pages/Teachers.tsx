@@ -1,10 +1,25 @@
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { motion } from "framer-motion"
-import { Search, Plus, Filter, Edit, Trash2, Eye, Mail, Phone } from "lucide-react"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { motion } from "framer-motion";
+import {
+  Search,
+  Plus,
+  Filter,
+  Edit,
+  Trash2,
+  Eye,
+  Mail,
+  Phone,
+} from "lucide-react";
 
 const mockTeachers = [
   {
@@ -15,17 +30,17 @@ const mockTeachers = [
     classes: ["3ème A", "2nde B"],
     status: "Actif",
     phone: "06 12 34 56 78",
-    experience: "8 ans"
+    experience: "8 ans",
   },
   {
     id: 2,
     name: "M. Jean Dubois",
-    email: "jean.dubois@ynov.com", 
+    email: "jean.dubois@ynov.com",
     subject: "Histoire-Géographie",
     classes: ["1ère S", "Terminale A"],
     status: "Actif",
     phone: "06 87 65 43 21",
-    experience: "12 ans"
+    experience: "12 ans",
   },
   {
     id: 3,
@@ -35,18 +50,19 @@ const mockTeachers = [
     classes: ["2nde A", "2nde B", "1ère S"],
     status: "Congé",
     phone: "06 98 76 54 32",
-    experience: "5 ans"
-  }
-]
+    experience: "5 ans",
+  },
+];
 
 export default function Teachers() {
-  const [searchTerm, setSearchTerm] = useState("")
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredTeachers = mockTeachers.filter(teacher =>
-    teacher.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    teacher.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    teacher.subject.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredTeachers = mockTeachers.filter(
+    (teacher) =>
+      teacher.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      teacher.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      teacher.subject.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
 
   return (
     <div className="space-y-8">
@@ -54,17 +70,19 @@ export default function Teachers() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex justify-between items-center"
+        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
       >
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Gestion des Enseignants</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">
+            Gestion des Enseignants
+          </h1>
+          <p className="text-sm md:text-base text-muted-foreground">
             Gérez le corps enseignant de votre établissement
           </p>
         </div>
-        <Button className="bg-gradient-primary hover:opacity-90 shadow-glow">
+        <Button className="bg-gradient-primary hover:opacity-90 shadow-glow w-full sm:w-auto h-11 sm:h-10">
           <Plus className="mr-2 h-4 w-4" />
-          Ajouter un enseignant
+          Ajouter
         </Button>
       </motion.div>
 
@@ -73,7 +91,7 @@ export default function Teachers() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="flex gap-4"
+        className="flex flex-col sm:flex-row gap-4"
       >
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -81,10 +99,10 @@ export default function Teachers() {
             placeholder="Rechercher un enseignant..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-10 h-11 sm:h-10"
           />
         </div>
-        <Button variant="outline">
+        <Button variant="outline" className="w-full sm:w-auto h-11 sm:h-10">
           <Filter className="mr-2 h-4 w-4" />
           Filtres
         </Button>
@@ -112,9 +130,13 @@ export default function Teachers() {
                     <CardDescription>{teacher.subject}</CardDescription>
                   </div>
                   <div className="flex gap-2">
-                    <Badge 
-                      variant={teacher.status === "Actif" ? "default" : "secondary"}
-                      className={teacher.status === "Actif" ? "bg-success" : "bg-warning"}
+                    <Badge
+                      variant={
+                        teacher.status === "Actif" ? "default" : "secondary"
+                      }
+                      className={
+                        teacher.status === "Actif" ? "bg-success" : "bg-warning"
+                      }
                     >
                       {teacher.status}
                     </Badge>
@@ -136,13 +158,18 @@ export default function Teachers() {
                     </div>
                     <div className="space-y-2">
                       <p className="text-sm">
-                        <span className="font-medium">Expérience:</span> {teacher.experience}
+                        <span className="font-medium">Expérience:</span>{" "}
+                        {teacher.experience}
                       </p>
                       <div>
                         <span className="text-sm font-medium">Classes:</span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {teacher.classes.map((classe) => (
-                            <Badge key={classe} variant="outline" className="text-xs">
+                            <Badge
+                              key={classe}
+                              variant="outline"
+                              className="text-xs"
+                            >
                               {classe}
                             </Badge>
                           ))}
@@ -157,7 +184,11 @@ export default function Teachers() {
                     <Button size="sm" variant="outline">
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button size="sm" variant="outline" className="text-destructive hover:text-destructive">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-destructive hover:text-destructive"
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -179,5 +210,5 @@ export default function Teachers() {
         </motion.div>
       )}
     </div>
-  )
+  );
 }

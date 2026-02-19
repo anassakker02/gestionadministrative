@@ -10,14 +10,14 @@ interface SchoolLayoutProps {
 }
 
 export function SchoolLayout({ children }: SchoolLayoutProps) {
-  const user = JSON.parse(localStorage.getItem("user") || "null");
+  const user = JSON.parse(sessionStorage.getItem("user") || "null");
 
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-secondary">
         <SchoolSidebar />
 
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0">
           <motion.header
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -26,37 +26,42 @@ export function SchoolLayout({ children }: SchoolLayoutProps) {
           >
             <SidebarTrigger className="mr-4" />
             <div className="flex-1">
-              <h1 className="text-xl font-semibold text-foreground">
+              <h1 className="text-lg md:text-xl font-bold text-foreground">
                 YNOV Campus - Gestion Scolaire
               </h1>
             </div>
             <div className="flex items-center space-x-4">
               {/* Notifications pour les admins et comptables */}
-              {user && (user.role === 'admin' || user.role === 'comptable') && (
-                <NotificationDropdown />
+              {user && (user.role === "admin" || user.role === "comptable") && (
+                <div className="mr-1">
+                  <NotificationDropdown />
+                </div>
               )}
-              
+
               {/* Affichage du nom, prénom et rôle */}
-              {(() => {
-                if (user) {
-                  return (
-                    <div className="flex flex-col text-end">
-                      <span className="font-semibold text-foreground">
-                        {user.nom} {user.prenom}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {user.role
-                          ? user.role.charAt(0).toUpperCase() +
-                            user.role.slice(1)
-                          : ""}
-                      </span>
-                    </div>
-                  );
-                }
-                return (
-                  <div className="text-sm text-muted-foreground">Bienvenue</div>
-                );
-              })()}
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col text-end">
+                    <span className="font-semibold text-foreground text-sm md:text-base leading-tight">
+                      {user.nom} {user.prenom}
+                    </span>
+                    <span className="text-[10px] md:text-xs text-muted-foreground leading-tight">
+                      {user.role
+                        ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+                        : ""}
+                    </span>
+                  </div>
+                  <div className="h-8 w-8 md:h-9 md:w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold flex-shrink-0">
+                    {user.prenom
+                      ? user.prenom.charAt(0).toUpperCase()
+                      : user.nom
+                        ? user.nom.charAt(0).toUpperCase()
+                        : "U"}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">Bienvenue</div>
+              )}
             </div>
           </motion.header>
 

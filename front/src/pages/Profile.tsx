@@ -5,8 +5,20 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { userService } from "@/services/userService";
@@ -25,14 +37,20 @@ const profileSchema = z.object({
   classe_id: z.string().optional(),
 });
 
-const passwordSchema = z.object({
-  oldPassword: z.string().min(1, "L'ancien mot de passe est requis"),
-  newPassword: z.string().min(6, "Le nouveau mot de passe doit contenir au moins 6 caractères"),
-  confirmPassword: z.string().min(1, "La confirmation du mot de passe est requise"),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "Les mots de passe ne correspondent pas",
-  path: ["confirmPassword"],
-});
+const passwordSchema = z
+  .object({
+    oldPassword: z.string().min(1, "L'ancien mot de passe est requis"),
+    newPassword: z
+      .string()
+      .min(6, "Le nouveau mot de passe doit contenir au moins 6 caractères"),
+    confirmPassword: z
+      .string()
+      .min(1, "La confirmation du mot de passe est requise"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Les mots de passe ne correspondent pas",
+    path: ["confirmPassword"],
+  });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
 type PasswordFormData = z.infer<typeof passwordSchema>;
@@ -61,31 +79,34 @@ export default function Profile() {
   const { data: studentData } = useQuery({
     queryKey: ["student", user?.id],
     queryFn: async () => {
-      if (!user?.id || user.role !== 'etudiant') {
+      if (!user?.id || user.role !== "etudiant") {
         throw new Error("Utilisateur non autorisé");
       }
-      
+
       // Rechercher l'étudiant par user_id au lieu d'utiliser l'ID utilisateur directement
-      const response = await fetch(`/gestionadminastration/us-central1/api/v1/etudiants?user_id=${user.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
+      const response = await fetch(
+        `/gestionadminastration/us-central1/api/v1/etudiants?user_id=${user.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
-      
+
       if (data.status && data.data && data.data.length > 0) {
         return { data: data.data[0] }; // Retourner le premier étudiant trouvé
       } else {
         throw new Error("Aucun étudiant trouvé pour cet utilisateur");
       }
     },
-    enabled: !!user?.id && (user.role === 'etudiant'),
+    enabled: !!user?.id && user.role === "etudiant",
   });
 
   const student = studentData?.data || studentData;
@@ -124,14 +145,14 @@ export default function Profile() {
     setIsLoading(true);
     try {
       const updatedUser = await userService.updateProfile(user.id, data);
-      
+
       // Mettre à jour le contexte d'authentification
       updateUser(updatedUser);
-      
+
       // Invalider les queries pour rafraîchir les données
       queryClient.invalidateQueries({ queryKey: ["profile"] });
       queryClient.invalidateQueries({ queryKey: ["student", user.id] });
-      
+
       toast({
         title: "Profil mis à jour",
         description: "Vos informations ont été mises à jour avec succès.",
@@ -140,7 +161,8 @@ export default function Profile() {
       console.error("Erreur lors de la mise à jour du profil:", error);
       toast({
         title: "Erreur",
-        description: "Une erreur est survenue lors de la mise à jour de votre profil.",
+        description:
+          "Une erreur est survenue lors de la mise à jour de votre profil.",
         variant: "destructive",
       });
     } finally {
@@ -157,9 +179,9 @@ export default function Profile() {
         oldPassword: data.oldPassword,
         newPassword: data.newPassword,
       });
-      
+
       resetPassword();
-      
+
       toast({
         title: "Mot de passe modifié",
         description: "Votre mot de passe a été modifié avec succès.",
@@ -168,7 +190,8 @@ export default function Profile() {
       console.error("Erreur lors du changement de mot de passe:", error);
       toast({
         title: "Erreur",
-        description: "Une erreur est survenue lors du changement de mot de passe.",
+        description:
+          "Une erreur est survenue lors du changement de mot de passe.",
         variant: "destructive",
       });
     } finally {
@@ -187,10 +210,10 @@ export default function Profile() {
     });
   };
 
-  const togglePasswordVisibility = (field: 'old' | 'new' | 'confirm') => {
-    setShowPasswords(prev => ({
+  const togglePasswordVisibility = (field: "old" | "new" | "confirm") => {
+    setShowPasswords((prev) => ({
       ...prev,
-      [field]: !prev[field]
+      [field]: !prev[field],
     }));
   };
 
@@ -209,10 +232,12 @@ export default function Profile() {
   }
 
   return (
-    <div className="container mx-auto py-8 space-y-6">
+    <div className="container mx-auto py-6 px-4 md:py-8 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Mon Profil</h1>
-        <p className="text-gray-600 mt-2">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+          Mon Profil
+        </h1>
+        <p className="text-sm md:text-base text-gray-600 mt-1 md:mt-2">
           Gérez vos informations personnelles
         </p>
       </div>
@@ -235,7 +260,9 @@ export default function Profile() {
                   className={errors.prenom ? "border-red-500" : ""}
                 />
                 {errors.prenom && (
-                  <p className="text-sm text-red-500">{errors.prenom.message}</p>
+                  <p className="text-sm text-red-500">
+                    {errors.prenom.message}
+                  </p>
                 )}
               </div>
 
@@ -282,7 +309,7 @@ export default function Profile() {
                 />
               </div>
 
-              {user.role === 'etudiant' && (
+              {user.role === "etudiant" && (
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="classe_id">Classe</Label>
                   <Select
@@ -304,11 +331,20 @@ export default function Profile() {
               )}
             </div>
 
-            <div className="flex gap-4 pt-4">
-              <Button type="submit" disabled={isLoading}>
+            <div className="flex flex-col sm:flex-row gap-3 pt-4">
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full sm:w-auto"
+              >
                 {isLoading ? "Mise à jour..." : "Mettre à jour"}
               </Button>
-              <Button type="button" variant="outline" onClick={handleReset}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleReset}
+                className="w-full sm:w-auto"
+              >
                 Annuler
               </Button>
             </div>
@@ -324,7 +360,10 @@ export default function Profile() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmitPassword(onSubmitPassword)} className="space-y-6">
+          <form
+            onSubmit={handleSubmitPassword(onSubmitPassword)}
+            className="space-y-6"
+          >
             <div className="space-y-2">
               <Label htmlFor="oldPassword">Ancien mot de passe</Label>
               <div className="relative">
@@ -339,7 +378,7 @@ export default function Profile() {
                   variant="ghost"
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => togglePasswordVisibility('old')}
+                  onClick={() => togglePasswordVisibility("old")}
                 >
                   {showPasswords.old ? (
                     <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -349,7 +388,9 @@ export default function Profile() {
                 </Button>
               </div>
               {passwordErrors.oldPassword && (
-                <p className="text-sm text-red-500">{passwordErrors.oldPassword.message}</p>
+                <p className="text-sm text-red-500">
+                  {passwordErrors.oldPassword.message}
+                </p>
               )}
             </div>
 
@@ -367,7 +408,7 @@ export default function Profile() {
                   variant="ghost"
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => togglePasswordVisibility('new')}
+                  onClick={() => togglePasswordVisibility("new")}
                 >
                   {showPasswords.new ? (
                     <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -377,25 +418,31 @@ export default function Profile() {
                 </Button>
               </div>
               {passwordErrors.newPassword && (
-                <p className="text-sm text-red-500">{passwordErrors.newPassword.message}</p>
+                <p className="text-sm text-red-500">
+                  {passwordErrors.newPassword.message}
+                </p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmer le nouveau mot de passe</Label>
+              <Label htmlFor="confirmPassword">
+                Confirmer le nouveau mot de passe
+              </Label>
               <div className="relative">
                 <Input
                   id="confirmPassword"
                   type={showPasswords.confirm ? "text" : "password"}
                   {...registerPassword("confirmPassword")}
-                  className={passwordErrors.confirmPassword ? "border-red-500" : ""}
+                  className={
+                    passwordErrors.confirmPassword ? "border-red-500" : ""
+                  }
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => togglePasswordVisibility('confirm')}
+                  onClick={() => togglePasswordVisibility("confirm")}
                 >
                   {showPasswords.confirm ? (
                     <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -405,15 +452,28 @@ export default function Profile() {
                 </Button>
               </div>
               {passwordErrors.confirmPassword && (
-                <p className="text-sm text-red-500">{passwordErrors.confirmPassword.message}</p>
+                <p className="text-sm text-red-500">
+                  {passwordErrors.confirmPassword.message}
+                </p>
               )}
             </div>
 
-            <div className="flex gap-4 pt-4">
-              <Button type="submit" disabled={isPasswordLoading}>
-                {isPasswordLoading ? "Modification..." : "Modifier le mot de passe"}
+            <div className="flex flex-col sm:flex-row gap-3 pt-4">
+              <Button
+                type="submit"
+                disabled={isPasswordLoading}
+                className="w-full sm:w-auto"
+              >
+                {isPasswordLoading
+                  ? "Modification..."
+                  : "Modifier le mot de passe"}
               </Button>
-              <Button type="button" variant="outline" onClick={() => resetPassword()}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => resetPassword()}
+                className="w-full sm:w-auto"
+              >
                 Annuler
               </Button>
             </div>
@@ -424,16 +484,18 @@ export default function Profile() {
       <Card>
         <CardHeader>
           <CardTitle>Informations de Compte</CardTitle>
-          <CardDescription>
-            Informations non modifiables
-          </CardDescription>
+          <CardDescription>Informations non modifiables</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label>Rôle</Label>
               <Input
-                value={user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : ""}
+                value={
+                  user.role
+                    ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+                    : ""
+                }
                 disabled
                 className="bg-gray-50"
               />

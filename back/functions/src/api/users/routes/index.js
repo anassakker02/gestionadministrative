@@ -217,6 +217,8 @@ const { authenticate } = require("../../../middlewares/auth");
  */
 router.get("/", authenticate, usersController.getAll.bind(usersController));
 router.post("/", authenticate, usersController.create.bind(usersController));
+// ⚠️ Les routes statiques DOIVENT être avant /:id pour éviter les conflits
+router.get("/pending", authenticate, usersController.getPendingUsers.bind(usersController));
 router.get(
   "/available-for-student",
   authenticate,
@@ -582,7 +584,7 @@ router.patch(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get("/pending", authenticate, usersController.getPendingUsers.bind(usersController));
+// Route déplacée en haut du fichier (avant /:id) pour éviter le conflit de routing Express
 
 /**
  * @swagger

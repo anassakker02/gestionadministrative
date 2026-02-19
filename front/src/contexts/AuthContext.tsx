@@ -45,29 +45,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const storedUser = localStorage.getItem("user");
-        let storedToken = localStorage.getItem("token");
-        const storedRefreshToken = localStorage.getItem("refreshToken");
+        const storedUser = sessionStorage.getItem("user");
+        let storedToken = sessionStorage.getItem("token");
+        const storedRefreshToken = sessionStorage.getItem("refreshToken");
 
         let isAuthenticatedFromStorage = false;
         if (storedUser && storedToken) {
           const userData = JSON.parse(storedUser);
-          
+
           // Vérifier si le compte est actif
           if (userData.isActive === false) {
             console.log("❌ Compte inactif détecté, déconnexion automatique");
-            localStorage.removeItem("user");
-            localStorage.removeItem("token");
-            localStorage.removeItem("refreshToken");
+            sessionStorage.removeItem("user");
+            sessionStorage.removeItem("token");
+            sessionStorage.removeItem("refreshToken");
             setUser(null);
             toast({
               title: "Compte inactif",
-              description: "Votre compte a été désactivé. Veuillez contacter l'administrateur.",
+              description:
+                "Votre compte a été désactivé. Veuillez contacter l'administrateur.",
               variant: "destructive",
             });
             return;
           }
-          
+
           setUser(userData);
           isAuthenticatedFromStorage = true;
         }
@@ -76,55 +77,55 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // If no valid token, but a refresh token exists, try to refresh
           try {
             storedToken = await refreshAccessToken();
-            // If refresh is successful, storedToken will be updated in localStorage
+            // If refresh is successful, storedToken will be updated in sessionStorage
           } catch (refreshError) {
             console.error("Failed to refresh token on startup:", refreshError);
             // Clear any invalid tokens to ensure a clean state for login
-            localStorage.removeItem("user");
-            localStorage.removeItem("token");
-            localStorage.removeItem("refreshToken");
+            sessionStorage.removeItem("user");
+            sessionStorage.removeItem("token");
+            sessionStorage.removeItem("refreshToken");
             // Optionally redirect to login, but the interceptor in api.ts might already handle this
           }
         }
 
         // Skip /me call if we already have user data - this makes navigation much faster
-        if (!isAuthenticatedFromStorage && localStorage.getItem("token")) {
+        if (!isAuthenticatedFromStorage && sessionStorage.getItem("token")) {
           // Only try /me if we don't have user data and have a token
           try {
             const me = await userService.me();
             if (me && me.user) {
               setUser(me.user);
-              localStorage.setItem("user", JSON.stringify(me.user));
+              sessionStorage.setItem("user", JSON.stringify(me.user));
             } else {
               // If /me fails, clear tokens
-              localStorage.removeItem("user");
-              localStorage.removeItem("token");
-              localStorage.removeItem("refreshToken");
+              sessionStorage.removeItem("user");
+              sessionStorage.removeItem("token");
+              sessionStorage.removeItem("refreshToken");
             }
           } catch (meError) {
             // If /me fails and we don't have stored user data, clear tokens
             if (!storedUser) {
-              localStorage.removeItem("user");
-              localStorage.removeItem("token");
-              localStorage.removeItem("refreshToken");
+              sessionStorage.removeItem("user");
+              sessionStorage.removeItem("token");
+              sessionStorage.removeItem("refreshToken");
             }
           }
         }
       } catch (error) {
         console.error(
           "Erreur lors de la vérification de l'authentification:",
-          error
+          error,
         );
-        localStorage.removeItem("user");
-        localStorage.removeItem("token");
-        localStorage.removeItem("refreshToken");
+        sessionStorage.removeItem("user");
+        sessionStorage.removeItem("token");
+        sessionStorage.removeItem("refreshToken");
       } finally {
         setLoading(false);
       }
     };
 
     checkAuth();
-  }, []);
+  }, [toast]); // Added toast to dependencies for completeness
 
   const login = async (credentials: LoginCredentials): Promise<boolean> => {
     try {
@@ -133,47 +134,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (response.status && response.user) {
         const userData = response.user;
-        
+
         // Debug: Afficher les informations de l'utilisateur
         console.log("User login data:", {
           id: userData.id,
           email: userData.email,
           role: userData.role,
-          isActive: userData.isActive
+          isActive: userData.isActive,
         });
 
         // Gérer le cas où isActive est undefined (par défaut, considérer comme actif)
         // Mais seulement si le backend ne retourne pas ce champ
         if (userData.isActive === undefined) {
-          console.log("isActive is undefined, setting to true by default (backend compatibility)");
+          console.log(
+            "isActive is undefined, setting to true by default (backend compatibility)",
+          );
           userData.isActive = true;
         }
 
         // Vérifier si le compte est explicitement désactivé (isActive: false)
-        if (userData.isActive === false && userData.role !== 'admin') {
-          console.log("Account explicitly deactivated for non-admin user:", userData.role);
+        if (userData.isActive === false && userData.role !== "admin") {
+          console.log(
+            "Account explicitly deactivated for non-admin user:",
+            userData.role,
+          );
           toast({
             title: "Compte désactivé",
-            description: "Votre compte a été désactivé. Veuillez contacter un administrateur.",
+            description:
+              "Votre compte a été désactivé. Veuillez contacter un administrateur.",
             variant: "destructive",
           });
           return false;
         }
 
         // Pour les admins, forcer isActive à true si ce n'est pas déjà le cas
-        if (userData.role === 'admin' && !userData.isActive) {
+        if (userData.role === "admin" && !userData.isActive) {
           console.log("Admin account marked as inactive, forcing activation");
           userData.isActive = true;
         }
 
         setUser(userData);
-        localStorage.setItem("user", JSON.stringify(userData));
+        sessionStorage.setItem("user", JSON.stringify(userData));
 
         if (response.token) {
-          localStorage.setItem("token", response.token);
+          sessionStorage.setItem("token", response.token);
         }
         if (response.refreshToken) {
-          localStorage.setItem("refreshToken", response.refreshToken);
+          sessionStorage.setItem("refreshToken", response.refreshToken);
         }
 
         toast({
@@ -192,21 +199,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (error: any) {
       console.error("Erreur lors de la connexion:", error);
-      
+
       // Gérer spécifiquement le cas d'un compte inactif
       if (error.response?.data?.code === "ACCOUNT_INACTIVE") {
         toast({
           title: "Compte désactivé",
-          description: error.response.data.message || "Votre compte a été désactivé. Veuillez contacter l'administrateur.",
+          description:
+            error.response.data.message ||
+            "Votre compte a été désactivé. Veuillez contacter l'administrateur.",
           variant: "destructive",
         });
         return false;
       }
-      
+
       // Gérer les autres erreurs de connexion
       toast({
         title: "Erreur de connexion",
-        description: error.response?.data?.message || "Impossible de se connecter au serveur",
+        description:
+          error.response?.data?.message ||
+          "Impossible de se connecter au serveur",
         variant: "destructive",
       });
       return false;
@@ -217,9 +228,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem("user");
-    localStorage.removeItem("token");
-    localStorage.removeItem("refreshToken"); // Remove refresh token on logout
+    sessionStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("refreshToken"); // Remove refresh token on logout
     toast({
       title: "Déconnexion",
       description: "Vous avez été déconnecté avec succès",
@@ -230,7 +241,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (user) {
       const updatedUser = { ...user, ...userData };
       setUser(updatedUser);
-      localStorage.setItem("user", JSON.stringify(updatedUser));
+      sessionStorage.setItem("user", JSON.stringify(updatedUser));
     }
   };
 

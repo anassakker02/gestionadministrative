@@ -117,7 +117,7 @@ const Students = () => {
     (student) =>
       student.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.class?.toLowerCase().includes(searchTerm.toLowerCase())
+      student.class?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   if (isLoading) return <div>Chargement des étudiants...</div>;
@@ -140,10 +140,10 @@ const Students = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="flex justify-between items-center"
+            className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
           >
             <div>
-              <h1 className="text-3xl font-bold text-foreground mb-2">
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
                 Gestion des Étudiants
               </h1>
               <p className="text-muted-foreground">

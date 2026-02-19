@@ -279,21 +279,18 @@ class PaiementController {
       if (status) {
         query = query.where("status", "==", status);
       }
-      // Essayer avec orderBy si possible
-      let snapshot;
-      try {
-        snapshot = await query.orderBy("createdAt", "desc").get();
-      } catch (e) {
-        console.warn(
-          "PaiementController: getAll - orderBy failed, retrying without orderBy:",
-          e?.message
-        );
-        snapshot = await query.get();
-      }
+      // Récupérer sans orderBy (évite les index composites manquants), trier en mémoire
+      const snapshot = await query.get();
       let paiements = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
+      // Tri en mémoire par createdAt desc
+      paiements.sort((a, b) => {
+        const aDate = a.createdAt?.toMillis?.() || 0;
+        const bDate = b.createdAt?.toMillis?.() || 0;
+        return bDate - aDate;
+      });
       console.log(
         `PaiementController: getAll - fetched ${paiements.length} paiements (by etudiant_id)`
       );
@@ -302,17 +299,17 @@ class PaiementController {
       if (etuFromQuery && paiements.length === 0) {
         let q2 = this.collection.where("qui_a_paye", "==", etuFromQuery);
         if (status) q2 = q2.where("status", "==", status);
-        let snap2;
-        try {
-          snap2 = await q2.orderBy("createdAt", "desc").get();
-        } catch (e2) {
-          snap2 = await q2.get();
-        }
+        const snap2 = await q2.get();
         const alt = snap2.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         if (alt.length > 0) {
           console.log(
             `PaiementController: getAll - fallback qui_a_paye returned ${alt.length}`
           );
+          alt.sort((a, b) => {
+            const aDate = a.createdAt?.toMillis?.() || 0;
+            const bDate = b.createdAt?.toMillis?.() || 0;
+            return bDate - aDate;
+          });
           paiements = alt;
         }
       }

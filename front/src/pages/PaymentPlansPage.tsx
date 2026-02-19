@@ -1,10 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Plus, X, Calendar, DollarSign, Edit, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,7 +31,9 @@ const createPaymentPlanSchema = z.object({
   etudiant: z.string().min(1, "Veuillez sélectionner un étudiant"),
   frais: z.string().min(1, "Veuillez sélectionner un frais"),
   nombreVersements: z.string().min(1, "Le nombre de versements est requis"),
-  datePremierVersement: z.string().min(1, "La date du premier versement est requise"),
+  datePremierVersement: z
+    .string()
+    .min(1, "La date du premier versement est requise"),
 });
 
 type CreatePaymentPlanForm = z.infer<typeof createPaymentPlanSchema>;
@@ -36,17 +50,21 @@ const PaymentPlansPage: React.FC = () => {
   const queryClient = useQueryClient();
 
   // Récupérer les plans de paiement
-  const { data: paymentPlans = [], isLoading, error } = useQuery({
-    queryKey: ['payment-plans'],
+  const {
+    data: paymentPlans = [],
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["payment-plans"],
     queryFn: async () => {
       try {
         const plans = await paymentPlanService.getAllPaymentPlans();
         return Array.isArray(plans) ? plans : [];
       } catch (error) {
-        console.error('Erreur lors de la récupération des plans:', error);
+        console.error("Erreur lors de la récupération des plans:", error);
         return [];
       }
-    }
+    },
   });
 
   const {
@@ -55,24 +73,25 @@ const PaymentPlansPage: React.FC = () => {
     formState: { errors },
     reset,
     setValue,
-    watch
+    watch,
   } = useForm<CreatePaymentPlanForm>({
     resolver: zodResolver(createPaymentPlanSchema),
     defaultValues: {
       nombreVersements: "3",
-      datePremierVersement: "2025-09-24"
-    }
+      datePremierVersement: "2025-09-24",
+    },
   });
 
   const onSubmit = async (data: CreatePaymentPlanForm) => {
     try {
       setIsCreating(true);
-      
+
       // Vérifier que l'utilisateur est connecté
       if (!user) {
         toast({
           title: "Erreur d'authentification",
-          description: "Vous devez être connecté pour créer un plan de paiement.",
+          description:
+            "Vous devez être connecté pour créer un plan de paiement.",
           variant: "destructive",
         });
         return;
@@ -85,25 +104,28 @@ const PaymentPlansPage: React.FC = () => {
       const planData = {
         name: `Plan de paiement - ${data.etudiant}`,
         anneeScolaire: "2024-2025",
-        installments: Array.from({ length: parseInt(data.nombreVersements) }, (_, index) => ({
-          percentage: Math.round(100 / parseInt(data.nombreVersements)),
-          dueDateOffsetMonths: index,
-          description: `Versement ${index + 1}`
-        })),
+        installments: Array.from(
+          { length: parseInt(data.nombreVersements) },
+          (_, index) => ({
+            percentage: Math.round(100 / parseInt(data.nombreVersements)),
+            dueDateOffsetMonths: index,
+            description: `Versement ${index + 1}`,
+          }),
+        ),
         etudiant_id: data.etudiant,
         frais_id: data.frais,
         date_premier_versement: data.datePremierVersement,
         created_by: user.id,
         created_by_name: `${user.prenom} ${user.nom}`,
-        status: 'actif'
+        status: "actif",
       };
 
       // Appel API réel
       const response = await paymentPlanService.createPaymentPlan(planData);
-      
+
       // Actualiser la liste des plans
-      queryClient.invalidateQueries({ queryKey: ['payment-plans'] });
-      
+      queryClient.invalidateQueries({ queryKey: ["payment-plans"] });
+
       toast({
         title: "Plan créé avec succès",
         description: `Le plan de paiement a été créé pour ${data.etudiant}.`,
@@ -115,7 +137,8 @@ const PaymentPlansPage: React.FC = () => {
       console.error("Erreur lors de la création du plan:", error);
       toast({
         title: "Erreur",
-        description: "Une erreur est survenue lors de la création du plan de paiement.",
+        description:
+          "Une erreur est survenue lors de la création du plan de paiement.",
         variant: "destructive",
       });
     } finally {
@@ -131,27 +154,37 @@ const PaymentPlansPage: React.FC = () => {
   const handleModifyPlan = (plan: PaymentPlan) => {
     setSelectedPlan(plan);
     setIsModifyModalOpen(true);
-    
+
     // Pré-remplir le formulaire avec les données du plan
-    const etudiantId = plan.name.split(' - ')[1] || '';
-    setValue('etudiant', etudiantId);
-    setValue('frais', 'frais1'); // Valeur par défaut
-    setValue('nombreVersements', plan.installments.length.toString());
-    
+    const etudiantId = plan.name.split(" - ")[1] || "";
+    setValue("etudiant", etudiantId);
+    setValue("frais", "frais1"); // Valeur par défaut
+    setValue("nombreVersements", plan.installments.length.toString());
+
     // Calculer la date du premier versement
-    let datePremierVersement = '2025-09-24';
+    let datePremierVersement = "2025-09-24";
     if (plan.createdAt) {
       try {
-        if (typeof plan.createdAt === 'object' && plan.createdAt && '_seconds' in plan.createdAt) {
-          datePremierVersement = new Date((plan.createdAt as any)._seconds * 1000).toISOString().split('T')[0];
-        } else if (typeof plan.createdAt === 'string') {
-          datePremierVersement = new Date(plan.createdAt).toISOString().split('T')[0];
+        if (
+          typeof plan.createdAt === "object" &&
+          plan.createdAt &&
+          "_seconds" in plan.createdAt
+        ) {
+          datePremierVersement = new Date(
+            (plan.createdAt as any)._seconds * 1000,
+          )
+            .toISOString()
+            .split("T")[0];
+        } else if (typeof plan.createdAt === "string") {
+          datePremierVersement = new Date(plan.createdAt)
+            .toISOString()
+            .split("T")[0];
         }
       } catch (error) {
-        console.error('Erreur lors du formatage de la date:', error);
+        console.error("Erreur lors du formatage de la date:", error);
       }
     }
-    setValue('datePremierVersement', datePremierVersement);
+    setValue("datePremierVersement", datePremierVersement);
   };
 
   const handleModifyCancel = () => {
@@ -169,12 +202,13 @@ const PaymentPlansPage: React.FC = () => {
 
     try {
       setIsDeleting(true);
-      
+
       // Vérifier que l'utilisateur est connecté
       if (!user) {
         toast({
           title: "Erreur d'authentification",
-          description: "Vous devez être connecté pour supprimer un plan de paiement.",
+          description:
+            "Vous devez être connecté pour supprimer un plan de paiement.",
           variant: "destructive",
         });
         return;
@@ -184,10 +218,10 @@ const PaymentPlansPage: React.FC = () => {
 
       // Appel API de suppression
       await paymentPlanService.deletePaymentPlan(planToDelete.id);
-      
+
       // Actualiser la liste des plans
-      queryClient.invalidateQueries({ queryKey: ['payment-plans'] });
-      
+      queryClient.invalidateQueries({ queryKey: ["payment-plans"] });
+
       toast({
         title: "Plan supprimé avec succès",
         description: `Le plan de paiement a été supprimé.`,
@@ -198,7 +232,8 @@ const PaymentPlansPage: React.FC = () => {
       console.error("Erreur lors de la suppression du plan:", error);
       toast({
         title: "Erreur",
-        description: "Une erreur est survenue lors de la suppression du plan de paiement.",
+        description:
+          "Une erreur est survenue lors de la suppression du plan de paiement.",
         variant: "destructive",
       });
     } finally {
@@ -213,12 +248,13 @@ const PaymentPlansPage: React.FC = () => {
   const onSubmitModify = async (data: CreatePaymentPlanForm) => {
     try {
       setIsCreating(true);
-      
+
       // Vérifier que l'utilisateur est connecté
       if (!user) {
         toast({
           title: "Erreur d'authentification",
-          description: "Vous devez être connecté pour modifier un plan de paiement.",
+          description:
+            "Vous devez être connecté pour modifier un plan de paiement.",
           variant: "destructive",
         });
         return;
@@ -240,25 +276,31 @@ const PaymentPlansPage: React.FC = () => {
       const updatedPlanData = {
         name: `Plan de paiement - ${data.etudiant}`,
         anneeScolaire: "2024-2025",
-        installments: Array.from({ length: parseInt(data.nombreVersements) }, (_, index) => ({
-          percentage: Math.round(100 / parseInt(data.nombreVersements)),
-          dueDateOffsetMonths: index,
-          description: `Versement ${index + 1}`
-        })),
+        installments: Array.from(
+          { length: parseInt(data.nombreVersements) },
+          (_, index) => ({
+            percentage: Math.round(100 / parseInt(data.nombreVersements)),
+            dueDateOffsetMonths: index,
+            description: `Versement ${index + 1}`,
+          }),
+        ),
         etudiant_id: data.etudiant,
         frais_id: data.frais,
         date_premier_versement: data.datePremierVersement,
         updated_by: user.id,
         updated_by_name: `${user.prenom} ${user.nom}`,
-        status: 'actif'
+        status: "actif",
       };
 
       // Appel API de mise à jour
-      const response = await paymentPlanService.updatePaymentPlan(selectedPlan.id, updatedPlanData);
-      
+      const response = await paymentPlanService.updatePaymentPlan(
+        selectedPlan.id,
+        updatedPlanData,
+      );
+
       // Actualiser la liste des plans
-      queryClient.invalidateQueries({ queryKey: ['payment-plans'] });
-      
+      queryClient.invalidateQueries({ queryKey: ["payment-plans"] });
+
       toast({
         title: "Plan modifié avec succès",
         description: `Le plan de paiement a été modifié pour ${data.etudiant}.`,
@@ -271,7 +313,8 @@ const PaymentPlansPage: React.FC = () => {
       console.error("Erreur lors de la modification du plan:", error);
       toast({
         title: "Erreur",
-        description: "Une erreur est survenue lors de la modification du plan de paiement.",
+        description:
+          "Une erreur est survenue lors de la modification du plan de paiement.",
         variant: "destructive",
       });
     } finally {
@@ -281,68 +324,88 @@ const PaymentPlansPage: React.FC = () => {
 
   // Fonction pour formater les dates
   const formatDate = (dateString: string) => {
-    if (!dateString) return 'N/A';
+    if (!dateString) return "N/A";
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
+      return date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
       });
     } catch (error) {
-      return 'N/A';
+      return "N/A";
     }
   };
 
   // Fonction pour formater les données d'affichage
   const formatPaymentPlanData = (plan: PaymentPlan) => {
     // Extraire l'ID de l'étudiant du nom du plan
-    const etudiantId = plan.name.split(' - ')[1] || 'N/A';
-    const etudiantName = etudiantId === 'etudiant1' ? 'Fatima Zahra' : 
-                        etudiantId === 'etudiant2' ? 'Omar Benali' : 
-                        etudiantId === 'etudiant3' ? 'Mohamed Mellouk' : etudiantId;
-    
+    const etudiantId = plan.name.split(" - ")[1] || "N/A";
+    const etudiantName =
+      etudiantId === "etudiant1"
+        ? "Fatima Zahra"
+        : etudiantId === "etudiant2"
+          ? "Omar Benali"
+          : etudiantId === "etudiant3"
+            ? "Mohamed Mellouk"
+            : etudiantId;
+
     // Calculer le montant total (simulation)
     const montantTotal = 15000; // MAD
-    
+
     // Calculer les échéances payées (simulation)
-    const echeancesPayees = Math.floor(Math.random() * plan.installments.length);
-    
+    const echeancesPayees = Math.floor(
+      Math.random() * plan.installments.length,
+    );
+
     // Calculer la date du premier versement (simulation basée sur la date de création)
-    let datePremierVersement = '2025-09-24'; // Valeur par défaut
-    
+    let datePremierVersement = "2025-09-24"; // Valeur par défaut
+
     if (plan.createdAt) {
       try {
-        if (typeof plan.createdAt === 'object' && plan.createdAt && '_seconds' in plan.createdAt) {
-          datePremierVersement = new Date((plan.createdAt as any)._seconds * 1000).toISOString().split('T')[0];
-        } else if (typeof plan.createdAt === 'string') {
-          datePremierVersement = new Date(plan.createdAt).toISOString().split('T')[0];
+        if (
+          typeof plan.createdAt === "object" &&
+          plan.createdAt &&
+          "_seconds" in plan.createdAt
+        ) {
+          datePremierVersement = new Date(
+            (plan.createdAt as any)._seconds * 1000,
+          )
+            .toISOString()
+            .split("T")[0];
+        } else if (typeof plan.createdAt === "string") {
+          datePremierVersement = new Date(plan.createdAt)
+            .toISOString()
+            .split("T")[0];
         }
       } catch (error) {
-        console.error('Erreur lors du formatage de la date:', error);
-        datePremierVersement = '2025-09-24';
+        console.error("Erreur lors du formatage de la date:", error);
+        datePremierVersement = "2025-09-24";
       }
     }
-    
+
     return {
       id: plan.id,
       etudiant: etudiantName,
-      frais: 'Frais de scolarité',
+      frais: "Frais de scolarité",
       montantTotal,
       datePremierVersement,
       echeancesPayees,
       totalEcheances: plan.installments.length,
-      statut: echeancesPayees === plan.installments.length ? 'Terminé' : 'En cours'
+      statut:
+        echeancesPayees === plan.installments.length ? "Terminé" : "En cours",
     };
   };
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 p-6">
       {/* Header Section */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold text-blue-900">Plans de Paiement</h1>
-        <Button 
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold text-blue-900">
+          Plans de Paiement
+        </h1>
+        <Button
           onClick={() => setIsModalOpen(true)}
-          className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg"
+          className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg w-full sm:w-auto"
         >
           <Plus className="h-4 w-4 mr-2" />
           Nouveau Plan
@@ -352,7 +415,9 @@ const PaymentPlansPage: React.FC = () => {
       {/* Main Content Card */}
       <Card className="bg-white shadow-lg rounded-xl">
         <CardHeader className="border-b border-gray-200">
-          <CardTitle className="text-xl font-bold text-blue-900">Liste des plans de paiement</CardTitle>
+          <CardTitle className="text-xl font-bold text-blue-900">
+            Liste des plans de paiement
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -385,16 +450,24 @@ const PaymentPlansPage: React.FC = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                    <td
+                      colSpan={7}
+                      className="px-6 py-12 text-center text-gray-500"
+                    >
                       <div className="flex justify-center items-center">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
-                        <span className="ml-2 text-gray-600">Chargement des plans...</span>
+                        <span className="ml-2 text-gray-600">
+                          Chargement des plans...
+                        </span>
                       </div>
                     </td>
                   </tr>
                 ) : paymentPlans.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                    <td
+                      colSpan={7}
+                      className="px-6 py-12 text-center text-gray-500"
+                    >
                       Aucun plan de paiement trouvé
                     </td>
                   </tr>
@@ -429,11 +502,13 @@ const PaymentPlansPage: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            planData.statut === 'Terminé' 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}>
+                          <span
+                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              planData.statut === "Terminé"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}
+                          >
                             {planData.statut}
                           </span>
                         </td>
@@ -492,7 +567,10 @@ const PaymentPlansPage: React.FC = () => {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {/* Étudiant */}
             <div className="space-y-2">
-              <Label htmlFor="etudiant" className="text-sm font-medium text-gray-700">
+              <Label
+                htmlFor="etudiant"
+                className="text-sm font-medium text-gray-700"
+              >
                 Étudiant <span className="text-red-500">*</span>
               </Label>
               <Select onValueChange={(value) => setValue("etudiant", value)}>
@@ -506,13 +584,18 @@ const PaymentPlansPage: React.FC = () => {
                 </SelectContent>
               </Select>
               {errors.etudiant && (
-                <p className="text-sm text-red-500">{errors.etudiant.message}</p>
+                <p className="text-sm text-red-500">
+                  {errors.etudiant.message}
+                </p>
               )}
             </div>
 
             {/* Frais à échelonner */}
             <div className="space-y-2">
-              <Label htmlFor="frais" className="text-sm font-medium text-gray-700">
+              <Label
+                htmlFor="frais"
+                className="text-sm font-medium text-gray-700"
+              >
                 Frais à échelonner <span className="text-red-500">*</span>
               </Label>
               <Select onValueChange={(value) => setValue("frais", value)}>
@@ -533,7 +616,10 @@ const PaymentPlansPage: React.FC = () => {
 
             {/* Nombre de versements */}
             <div className="space-y-2">
-              <Label htmlFor="nombreVersements" className="text-sm font-medium text-gray-700">
+              <Label
+                htmlFor="nombreVersements"
+                className="text-sm font-medium text-gray-700"
+              >
                 Nombre de versements <span className="text-red-500">*</span>
               </Label>
               <Input
@@ -545,13 +631,18 @@ const PaymentPlansPage: React.FC = () => {
                 max="12"
               />
               {errors.nombreVersements && (
-                <p className="text-sm text-red-500">{errors.nombreVersements.message}</p>
+                <p className="text-sm text-red-500">
+                  {errors.nombreVersements.message}
+                </p>
               )}
             </div>
 
             {/* Date du premier versement */}
             <div className="space-y-2">
-              <Label htmlFor="datePremierVersement" className="text-sm font-medium text-gray-700">
+              <Label
+                htmlFor="datePremierVersement"
+                className="text-sm font-medium text-gray-700"
+              >
                 Date du 1er versement <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
@@ -564,7 +655,9 @@ const PaymentPlansPage: React.FC = () => {
                 <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
               </div>
               {errors.datePremierVersement && (
-                <p className="text-sm text-red-500">{errors.datePremierVersement.message}</p>
+                <p className="text-sm text-red-500">
+                  {errors.datePremierVersement.message}
+                </p>
               )}
             </div>
 
@@ -615,7 +708,10 @@ const PaymentPlansPage: React.FC = () => {
           <form onSubmit={handleSubmit(onSubmitModify)} className="space-y-6">
             {/* Étudiant */}
             <div className="space-y-2">
-              <Label htmlFor="etudiant" className="text-sm font-medium text-gray-700">
+              <Label
+                htmlFor="etudiant"
+                className="text-sm font-medium text-gray-700"
+              >
                 Étudiant <span className="text-red-500">*</span>
               </Label>
               <Select onValueChange={(value) => setValue("etudiant", value)}>
@@ -629,13 +725,18 @@ const PaymentPlansPage: React.FC = () => {
                 </SelectContent>
               </Select>
               {errors.etudiant && (
-                <p className="text-sm text-red-500">{errors.etudiant.message}</p>
+                <p className="text-sm text-red-500">
+                  {errors.etudiant.message}
+                </p>
               )}
             </div>
 
             {/* Frais à échelonner */}
             <div className="space-y-2">
-              <Label htmlFor="frais" className="text-sm font-medium text-gray-700">
+              <Label
+                htmlFor="frais"
+                className="text-sm font-medium text-gray-700"
+              >
                 Frais à échelonner <span className="text-red-500">*</span>
               </Label>
               <Select onValueChange={(value) => setValue("frais", value)}>
@@ -656,7 +757,10 @@ const PaymentPlansPage: React.FC = () => {
 
             {/* Nombre de versements */}
             <div className="space-y-2">
-              <Label htmlFor="nombreVersements" className="text-sm font-medium text-gray-700">
+              <Label
+                htmlFor="nombreVersements"
+                className="text-sm font-medium text-gray-700"
+              >
                 Nombre de versements <span className="text-red-500">*</span>
               </Label>
               <Input
@@ -668,13 +772,18 @@ const PaymentPlansPage: React.FC = () => {
                 max="12"
               />
               {errors.nombreVersements && (
-                <p className="text-sm text-red-500">{errors.nombreVersements.message}</p>
+                <p className="text-sm text-red-500">
+                  {errors.nombreVersements.message}
+                </p>
               )}
             </div>
 
             {/* Date du premier versement */}
             <div className="space-y-2">
-              <Label htmlFor="datePremierVersement" className="text-sm font-medium text-gray-700">
+              <Label
+                htmlFor="datePremierVersement"
+                className="text-sm font-medium text-gray-700"
+              >
                 Date du 1er versement <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
@@ -687,7 +796,9 @@ const PaymentPlansPage: React.FC = () => {
                 <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
               </div>
               {errors.datePremierVersement && (
-                <p className="text-sm text-red-500">{errors.datePremierVersement.message}</p>
+                <p className="text-sm text-red-500">
+                  {errors.datePremierVersement.message}
+                </p>
               )}
             </div>
 
@@ -737,17 +848,22 @@ const PaymentPlansPage: React.FC = () => {
 
           <div className="space-y-4">
             <p className="text-gray-600">
-              Êtes-vous sûr de vouloir supprimer ce plan de paiement ? Cette action est irréversible.
+              Êtes-vous sûr de vouloir supprimer ce plan de paiement ? Cette
+              action est irréversible.
             </p>
-            
+
             {planToDelete && (
               <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-medium text-gray-900 mb-2">Détails du plan :</h4>
+                <h4 className="font-medium text-gray-900 mb-2">
+                  Détails du plan :
+                </h4>
                 <p className="text-sm text-gray-600">
-                  <strong>Étudiant :</strong> {planToDelete.name.split(' - ')[1] || 'N/A'}
+                  <strong>Étudiant :</strong>{" "}
+                  {planToDelete.name.split(" - ")[1] || "N/A"}
                 </p>
                 <p className="text-sm text-gray-600">
-                  <strong>Échéances :</strong> {planToDelete.installments.length} versements
+                  <strong>Échéances :</strong>{" "}
+                  {planToDelete.installments.length} versements
                 </p>
               </div>
             )}

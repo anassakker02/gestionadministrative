@@ -226,52 +226,59 @@ class TarifController {
       
       // Si pas de paramètres de pagination, récupérer tous les tarifs (actifs et inactifs)
       if (!page && !limit) {
-        let query = this.collection.orderBy("createdAt", "desc");
+        // Pas de orderBy pour éviter le besoin d'index Firestore
+      let query = this.collection;
 
-        // Recherche par nom si le paramètre search est fourni
-        if (search && search.trim()) {
-          query = query
-            .where("nom", ">=", search.trim())
-            .where("nom", "<=", search.trim() + "\uf8ff");
-        }
-
-        const snapshot = await query.get();
-        const tarifs = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-        return res.status(200).json({
-          status: true,
-          data: tarifs,
-        });
+      // Recherche par nom si le paramètre search est fourni
+      if (search && search.trim()) {
+        query = query
+          .orderBy("nom")
+          .where("nom", ">=", search.trim())
+          .where("nom", "<=", search.trim() + "\uf8ff");
       }
+
+      const snapshot = await query.get();
+      const tarifs = snapshot.docs
+        .sort((a, b) => {
+          const aDate = a.data().createdAt?.toMillis?.() || 0;
+          const bDate = b.data().createdAt?.toMillis?.() || 0;
+          return bDate - aDate;
+        })
+        .map((doc) => ({ id: doc.id, ...doc.data() }));
+
+      return res.status(200).json({
+        status: true,
+        data: tarifs,
+      });
+    }
 
       // Pagination si les paramètres sont fournis
       const pageNumber = parseInt(page) || 1;
       const limitNumber = parseInt(limit) || 10;
 
-      let query = this.collection.orderBy("createdAt", "desc");
+      // Pas de orderBy pour éviter le besoin d'index Firestore
+      let query2 = this.collection;
 
       // Recherche par nom si le paramètre search est fourni
       if (search && search.trim()) {
-        query = query
+        query2 = query2
+          .orderBy("nom")
           .where("nom", ">=", search.trim())
           .where("nom", "<=", search.trim() + "\uf8ff");
       }
 
-      // Pagination
+      const allSnapshot = await query2.get();
+      const allDocs = allSnapshot.docs.sort((a, b) => {
+        const aDate = a.data().createdAt?.toMillis?.() || 0;
+        const bDate = b.data().createdAt?.toMillis?.() || 0;
+        return bDate - aDate;
+      });
+      const total = allDocs.length;
       const offset = (pageNumber - 1) * limitNumber;
-      const snapshot = await query.limit(limitNumber).offset(offset).get();
-
-      const tarifs = snapshot.docs.map((doc) => ({
+      const tarifs = allDocs.slice(offset, offset + limitNumber).map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-
-      // Compter le total des documents pour la pagination
-      const totalSnapshot = await this.collection.get();
-      const total = totalSnapshot.size;
 
       return res.status(200).json({
         status: true,

@@ -51,7 +51,7 @@ export default function Classes() {
       }
       return acc;
     },
-    {} as Record<string, number>
+    {} as Record<string, number>,
   );
 
   const deleteMutation = useMutation({
@@ -87,18 +87,18 @@ export default function Classes() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex justify-between items-center"
+        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
       >
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">
             Gestion des Classes
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm md:text-base text-muted-foreground">
             Organisez et gérez vos classes scolaires
           </p>
         </div>
         <Button
-          className="bg-gradient-primary hover:opacity-90 shadow-glow"
+          className="bg-gradient-primary hover:opacity-90 shadow-glow w-full sm:w-auto"
           onClick={() => setIsModalOpen(true)}
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -149,10 +149,11 @@ export default function Classes() {
                     })()}
                   </Badge>
                 </div>
-                <div className="flex gap-2 justify-end mt-2">
+                <div className="flex flex-wrap gap-2 justify-end mt-2">
                   <Button
                     variant="outline"
                     size="sm"
+                    className="flex-1 sm:flex-none"
                     onClick={() => {
                       setSelectedClass(classe as unknown as Classe);
                       setIsEditOpen(true);
@@ -163,6 +164,7 @@ export default function Classes() {
                   <Button
                     variant="destructive"
                     size="sm"
+                    className="flex-1 sm:flex-none"
                     disabled={deleteMutation.isPending}
                     onClick={() => {
                       if (!classe.id) {
@@ -175,7 +177,7 @@ export default function Classes() {
                         return;
                       }
                       const ok = window.confirm(
-                        `Supprimer la classe "${classe.nom}" ? Cette action est irréversible.`
+                        `Supprimer la classe "${classe.nom}" ? Cette action est irréversible.`,
                       );
                       if (ok) deleteMutation.mutate(classe.id as string);
                     }}
@@ -210,11 +212,11 @@ export default function Classes() {
                         }
                         const capacity = Math.max(
                           1,
-                          Number(classe.capacite || 0)
+                          Number(classe.capacite || 0),
                         );
                         const percent = Math.min(
                           100,
-                          Math.max(0, (count / capacity) * 100)
+                          Math.max(0, (count / capacity) * 100),
                         );
                         return { width: `${percent}%` } as React.CSSProperties;
                       })()}
@@ -231,7 +233,7 @@ export default function Classes() {
                       }
                       const capacity = Math.max(
                         1,
-                        Number(classe.capacite || 0)
+                        Number(classe.capacite || 0),
                       );
                       return (
                         <>

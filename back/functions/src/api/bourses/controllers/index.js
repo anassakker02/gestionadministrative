@@ -95,26 +95,32 @@ class BourseController {
       const pageNumber = parseInt(page);
       const limitNumber = parseInt(limit);
 
-      let query = this.collection.orderBy('createdAt', 'desc');
+      // Pas de orderBy pour éviter le besoin d'index Firestore
+      let query = this.collection;
 
       // Recherche par nom si le paramètre search est fourni
       if (search && search.trim()) {
-        query = query.where('nom', '>=', search.trim())
+        query = query.orderBy('nom')
+          .where('nom', '>=', search.trim())
           .where('nom', '<=', search.trim() + '\uf8ff');
       }
 
-      // Pagination
-      const offset = (pageNumber - 1) * limitNumber;
-      const snapshot = await query.limit(limitNumber).offset(offset).get();
+      // Récupérer tous les docs puis trier/paginer en mémoire
+      const allSnapshot = await query.get();
+      const allDocs = allSnapshot.docs.sort((a, b) => {
+        const aDate = a.data().createdAt?.toMillis?.() || 0;
+        const bDate = b.data().createdAt?.toMillis?.() || 0;
+        return bDate - aDate; // desc
+      });
 
-      const bourses = snapshot.docs.map((doc) => ({
+      const total = allDocs.length;
+      const offset = (pageNumber - 1) * limitNumber;
+      const paginatedDocs = allDocs.slice(offset, offset + limitNumber);
+
+      const bourses = paginatedDocs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-
-      // Compter le total des documents pour la pagination
-      const totalSnapshot = await this.collection.get();
-      const total = totalSnapshot.size;
 
       return res.status(200).json({
         status: true,

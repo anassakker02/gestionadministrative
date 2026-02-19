@@ -19,40 +19,42 @@ class StudentPortalController {
     try {
       const userId = req.user.id; // ID de l'utilisateur connecté
       const userRole = req.user.role; // Rôle de l'utilisateur connecté
-      
+
       let etudiantSnapshot;
-      
+
       if (userRole === "parent") {
         // Pour un parent, trouver l'étudiant lié via etudiant_id dans le profil parent
         const usersCollection = db.collection("users");
         const parentDoc = await usersCollection.doc(userId).get();
-        
+
         if (!parentDoc.exists) {
           return res.status(404).json({
             status: false,
-            message: "Parent non trouvé"
+            message: "Parent non trouvé",
           });
         }
-        
+
         const parentData = parentDoc.data();
         const etudiantId = parentData.etudiant_id;
-        
+
         if (!etudiantId) {
           return res.status(404).json({
             status: false,
-            message: "Aucun étudiant lié à ce parent"
+            message: "Aucun étudiant lié à ce parent",
           });
         }
-        
+
         // Récupérer l'étudiant lié directement par son ID de document
-        const etudiantDoc = await this.etudiantsCollection.doc(etudiantId).get();
+        const etudiantDoc = await this.etudiantsCollection
+          .doc(etudiantId)
+          .get();
         if (!etudiantDoc.exists) {
           return res.status(404).json({
             status: false,
-            message: "Étudiant lié non trouvé"
+            message: "Étudiant lié non trouvé",
           });
         }
-        
+
         etudiantSnapshot = { docs: [etudiantDoc] };
       } else {
         // Pour un étudiant, trouver l'étudiant correspondant à cet utilisateur
@@ -64,7 +66,7 @@ class StudentPortalController {
       if (etudiantSnapshot.empty) {
         return res.status(404).json({
           status: false,
-          message: "Étudiant non trouvé pour cet utilisateur"
+          message: "Étudiant non trouvé pour cet utilisateur",
         });
       }
 
@@ -75,7 +77,9 @@ class StudentPortalController {
       // Récupérer les informations de la classe
       let classeInfo = null;
       if (etudiantData.classe_id) {
-        const classeDoc = await this.classesCollection.doc(etudiantData.classe_id).get();
+        const classeDoc = await this.classesCollection
+          .doc(etudiantData.classe_id)
+          .get();
         if (classeDoc.exists) {
           classeInfo = { id: classeDoc.id, ...classeDoc.data() };
         }
@@ -84,7 +88,9 @@ class StudentPortalController {
       // Récupérer les informations de la bourse
       let bourseInfo = null;
       if (etudiantData.bourse_id) {
-        const bourseDoc = await this.boursesCollection.doc(etudiantData.bourse_id).get();
+        const bourseDoc = await this.boursesCollection
+          .doc(etudiantData.bourse_id)
+          .get();
         if (bourseDoc.exists) {
           bourseInfo = { id: bourseDoc.id, ...bourseDoc.data() };
         }
@@ -93,16 +99,31 @@ class StudentPortalController {
       // Calculer les frais totaux pour l'année courante
       const currentYear = new Date().getFullYear();
       const academicYear = `${currentYear}-${currentYear + 1}`;
-      
+
       // Récupérer les tarifs pour l'année scolaire
-      const tarifsSnapshot = await this.tarifsCollection
-        .where("annee_scolaire", "==", academicYear)
-        .where("isActive", "==", true)
-        .get();
+      let tarifsSnapshot = { docs: [] };
+      try {
+        tarifsSnapshot = await this.tarifsCollection
+          .where("annee_scolaire", "==", academicYear)
+          .where("isActive", "==", true)
+          .get();
+      } catch (tarifsError) {
+        console.log(
+          "⚠️ Erreur query tarifs (annee + isActive), essai simple:",
+          tarifsError.message,
+        );
+        try {
+          tarifsSnapshot = await this.tarifsCollection
+            .where("annee_scolaire", "==", academicYear)
+            .get();
+        } catch (fallbackError) {
+          console.error("❌ Erreur fallback tarifs:", fallbackError.message);
+        }
+      }
 
       let fraisTotal = 0;
       const tarifs = [];
-      tarifsSnapshot.docs.forEach(doc => {
+      tarifsSnapshot.docs.forEach((doc) => {
         const tarif = { id: doc.id, ...doc.data() };
         tarifs.push(tarif);
         fraisTotal += tarif.montant || 0;
@@ -123,33 +144,58 @@ class StudentPortalController {
       const fraisAvecReduction = Math.max(0, fraisTotal - reductionBourse);
 
       // Récupérer tous les paiements de l'étudiant
-      let paiementsSnapshot = await this.paiementsCollection
-        .where("etudiant_id", "==", etudiantId)
-        .orderBy("date", "desc")
-        .get();
+      let paiementsSnapshot = { docs: [] };
+      try {
+        paiementsSnapshot = await this.paiementsCollection
+          .where("etudiant_id", "==", etudiantId)
+          .orderBy("date", "desc")
+          .get();
+      } catch (queryError) {
+        console.log(
+          "⚠️ Erreur query paiements (etudiant_id + orderBy), essai sans orderBy:",
+          queryError.message,
+        );
+        try {
+          paiementsSnapshot = await this.paiementsCollection
+            .where("etudiant_id", "==", etudiantId)
+            .get();
+        } catch (fallbackError) {
+          console.error("❌ Erreur fallback paiements:", fallbackError.message);
+        }
+      }
 
       // Si aucun paiement trouvé, essayer avec l'ID standard
       if (paiementsSnapshot.docs.length === 0) {
         const stdId = `std-${etudiantData.prenom?.toLowerCase()}-${etudiantData.nom?.toLowerCase()}`;
         console.log("🔍 Dashboard - Essai avec ID standard:", stdId);
-        
+
         try {
           paiementsSnapshot = await this.paiementsCollection
             .where("etudiant_id", "==", stdId)
             .orderBy("date", "desc")
             .get();
         } catch (orderByError) {
-          // Si orderBy échoue, essayer sans orderBy
-          paiementsSnapshot = await this.paiementsCollection
-            .where("etudiant_id", "==", stdId)
-            .get();
+          console.log(
+            "⚠️ Erreur query paiements (stdId + orderBy), essai sans orderBy:",
+            orderByError.message,
+          );
+          try {
+            paiementsSnapshot = await this.paiementsCollection
+              .where("etudiant_id", "==", stdId)
+              .get();
+          } catch (stdFallbackError) {
+            console.error(
+              "❌ Erreur fallback paiements stdId:",
+              stdFallbackError.message,
+            );
+          }
         }
       }
 
       const paiements = [];
       let totalPaye = 0;
 
-      paiementsSnapshot.docs.forEach(doc => {
+      paiementsSnapshot.docs.forEach((doc) => {
         const paiement = { id: doc.id, ...doc.data() };
         paiements.push(paiement);
         totalPaye += paiement.montantPaye || 0;
@@ -159,31 +205,56 @@ class StudentPortalController {
       const montantRestant = Math.max(0, fraisAvecReduction - totalPaye);
 
       // Récupérer les factures de l'étudiant
-      let facturesSnapshot = await this.facturesCollection
-        .where("etudiant_id", "==", etudiantId)
-        .orderBy("date_emission", "desc")
-        .get();
+      let facturesSnapshot = { docs: [] };
+      try {
+        facturesSnapshot = await this.facturesCollection
+          .where("etudiant_id", "==", etudiantId)
+          .orderBy("date_emission", "desc")
+          .get();
+      } catch (queryError) {
+        console.log(
+          "⚠️ Erreur query factures (etudiant_id + orderBy), essai sans orderBy:",
+          queryError.message,
+        );
+        try {
+          facturesSnapshot = await this.facturesCollection
+            .where("etudiant_id", "==", etudiantId)
+            .get();
+        } catch (fallbackError) {
+          console.error("❌ Erreur fallback factures:", fallbackError.message);
+        }
+      }
 
       // Si aucune facture trouvée, essayer avec l'ID standard
       if (facturesSnapshot.docs.length === 0) {
         const stdId = `std-${etudiantData.prenom?.toLowerCase()}-${etudiantData.nom?.toLowerCase()}`;
         console.log("🔍 Dashboard - Factures - Essai avec ID standard:", stdId);
-        
+
         try {
           facturesSnapshot = await this.facturesCollection
             .where("etudiant_id", "==", stdId)
             .orderBy("date_emission", "desc")
             .get();
         } catch (orderByError) {
-          // Si orderBy échoue, essayer sans orderBy
-          facturesSnapshot = await this.facturesCollection
-            .where("etudiant_id", "==", stdId)
-            .get();
+          console.log(
+            "⚠️ Erreur query factures (stdId + orderBy), essai sans orderBy:",
+            orderByError.message,
+          );
+          try {
+            facturesSnapshot = await this.facturesCollection
+              .where("etudiant_id", "==", stdId)
+              .get();
+          } catch (stdFallbackError) {
+            console.error(
+              "❌ Erreur fallback factures stdId:",
+              stdFallbackError.message,
+            );
+          }
         }
       }
 
       const factures = [];
-      facturesSnapshot.docs.forEach(doc => {
+      facturesSnapshot.docs.forEach((doc) => {
         const facture = { id: doc.id, ...doc.data() };
         factures.push(facture);
       });
@@ -197,7 +268,7 @@ class StudentPortalController {
       // Déchiffrer les champs sensibles
       let telephoneDecrypted = etudiantData.telephone;
       let adresseDecrypted = etudiantData.adresse;
-      
+
       try {
         if (etudiantData.telephone) {
           telephoneDecrypted = decrypt(etudiantData.telephone);
@@ -206,7 +277,10 @@ class StudentPortalController {
           adresseDecrypted = decrypt(etudiantData.adresse);
         }
       } catch (decryptError) {
-        console.log("⚠️ Erreur lors du déchiffrement des données sensibles:", decryptError.message);
+        console.log(
+          "⚠️ Erreur lors du déchiffrement des données sensibles:",
+          decryptError.message,
+        );
         // Continuer avec les données chiffrées si le déchiffrement échoue
       }
 
@@ -220,7 +294,7 @@ class StudentPortalController {
           telephone: telephoneDecrypted,
           adresse: adresseDecrypted,
           classe: classeInfo,
-          bourse: bourseInfo
+          bourse: bourseInfo,
         },
         frais: {
           total: fraisTotal,
@@ -228,26 +302,28 @@ class StudentPortalController {
           totalAvecReduction: fraisAvecReduction,
           totalPaye: totalPaye,
           montantRestant: montantRestant,
-          statut: statutPaiement
+          statut: statutPaiement,
         },
         paiements: paiements,
         factures: factures,
         tarifs: tarifs,
-        anneeScolaire: academicYear
+        anneeScolaire: academicYear,
       };
 
       return res.status(200).json({
         status: true,
         message: "Tableau de bord récupéré avec succès",
-        data: dashboard
+        data: dashboard,
       });
-
     } catch (error) {
-      console.error("Erreur lors de la récupération du tableau de bord:", error);
+      console.error(
+        "Erreur lors de la récupération du tableau de bord:",
+        error,
+      );
       return res.status(500).json({
         status: false,
         message: "Erreur lors de la récupération du tableau de bord",
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -260,40 +336,47 @@ class StudentPortalController {
     try {
       const userId = req.user.id;
       const userRole = req.user.role;
-      console.log("🔍 getStudentPayments - User ID:", userId, "Role:", userRole);
-      
+      console.log(
+        "🔍 getStudentPayments - User ID:",
+        userId,
+        "Role:",
+        userRole,
+      );
+
       let etudiantId, etudiantData;
-      
+
       if (userRole === "parent") {
         // Pour un parent, trouver l'étudiant lié
         const usersCollection = db.collection("users");
         const parentDoc = await usersCollection.doc(userId).get();
-        
+
         if (!parentDoc.exists) {
           return res.status(404).json({
             status: false,
-            message: "Parent non trouvé"
+            message: "Parent non trouvé",
           });
         }
-        
+
         const parentData = parentDoc.data();
         const linkedEtudiantId = parentData.etudiant_id;
-        
+
         if (!linkedEtudiantId) {
           return res.status(404).json({
             status: false,
-            message: "Aucun étudiant lié à ce parent"
+            message: "Aucun étudiant lié à ce parent",
           });
         }
-        
-        const etudiantDoc = await this.etudiantsCollection.doc(linkedEtudiantId).get();
+
+        const etudiantDoc = await this.etudiantsCollection
+          .doc(linkedEtudiantId)
+          .get();
         if (!etudiantDoc.exists) {
           return res.status(404).json({
             status: false,
-            message: "Étudiant lié non trouvé"
+            message: "Étudiant lié non trouvé",
           });
         }
-        
+
         etudiantId = etudiantDoc.id;
         etudiantData = etudiantDoc.data();
       } else {
@@ -306,14 +389,20 @@ class StudentPortalController {
           console.log("❌ Aucun étudiant trouvé pour user_id:", userId);
           return res.status(404).json({
             status: false,
-            message: "Étudiant non trouvé pour cet utilisateur"
+            message: "Étudiant non trouvé pour cet utilisateur",
           });
         }
 
         etudiantId = etudiantSnapshot.docs[0].id;
         etudiantData = etudiantSnapshot.docs[0].data();
       }
-      console.log("✅ Étudiant trouvé - ID:", etudiantId, "Nom:", etudiantData.nom, etudiantData.prenom);
+      console.log(
+        "✅ Étudiant trouvé - ID:",
+        etudiantId,
+        "Nom:",
+        etudiantData.nom,
+        etudiantData.prenom,
+      );
 
       // Récupérer les paiements avec pagination
       const { page = 1, limit = 10 } = req.query;
@@ -323,22 +412,30 @@ class StudentPortalController {
       let paiementsSnapshot = await this.paiementsCollection
         .where("etudiant_id", "==", etudiantId)
         .get();
-        
-      console.log("🔍 Paiements trouvés avec etudiant_id:", paiementsSnapshot.docs.length);
-        
+
+      console.log(
+        "🔍 Paiements trouvés avec etudiant_id:",
+        paiementsSnapshot.docs.length,
+      );
+
       // Si aucun paiement trouvé avec etudiant_id, essayer avec d'autres champs possibles
       if (paiementsSnapshot.docs.length === 0) {
-        console.log("⚠️ Aucun paiement trouvé avec etudiant_id, essai avec d'autres méthodes...");
-        
+        console.log(
+          "⚠️ Aucun paiement trouvé avec etudiant_id, essai avec d'autres méthodes...",
+        );
+
         // Essayer avec l'ID standard "std-fatima-zahra" (format utilisé dans les paiements)
         const stdId = `std-${etudiantData.prenom?.toLowerCase()}-${etudiantData.nom?.toLowerCase()}`;
         console.log("🔍 Essai avec ID standard:", stdId);
-        
+
         const paiementsByStdId = await this.paiementsCollection
           .where("etudiant_id", "==", stdId)
           .get();
-        
-        console.log("🔍 Paiements trouvés avec ID standard:", paiementsByStdId.docs.length);
+
+        console.log(
+          "🔍 Paiements trouvés avec ID standard:",
+          paiementsByStdId.docs.length,
+        );
         if (paiementsByStdId.docs.length > 0) {
           paiementsSnapshot = paiementsByStdId;
         }
@@ -346,46 +443,61 @@ class StudentPortalController {
         if (etudiantData.nom && etudiantData.prenom) {
           const nomComplet = `${etudiantData.prenom} ${etudiantData.nom}`;
           console.log("🔍 Recherche par nom complet:", nomComplet);
-          
+
           const paiementsByName = await this.paiementsCollection
             .where("nom_etudiant", "==", nomComplet)
             .get();
-          
-          console.log("🔍 Paiements trouvés par nom:", paiementsByName.docs.length);
+
+          console.log(
+            "🔍 Paiements trouvés par nom:",
+            paiementsByName.docs.length,
+          );
           if (paiementsByName.docs.length > 0) {
             paiementsSnapshot = paiementsByName;
           }
         }
-        
+
         // Essayer avec l'email
         if (paiementsSnapshot.docs.length === 0 && etudiantData.email) {
           console.log("🔍 Recherche par email:", etudiantData.email);
           const paiementsByEmail = await this.paiementsCollection
             .where("email_etudiant", "==", etudiantData.email)
             .get();
-          
-          console.log("🔍 Paiements trouvés par email:", paiementsByEmail.docs.length);
+
+          console.log(
+            "🔍 Paiements trouvés par email:",
+            paiementsByEmail.docs.length,
+          );
           if (paiementsByEmail.docs.length > 0) {
             paiementsSnapshot = paiementsByEmail;
           }
         }
       }
-      
+
       // Essayer de trier par date si on trouve des paiements
       if (paiementsSnapshot.docs.length > 0) {
         try {
-          paiementsSnapshot = await this.paiementsCollection
+          // Re-charger les paiements triés
+          const sortedSnapshot = await this.paiementsCollection
             .where("etudiant_id", "==", etudiantId)
             .orderBy("date", "desc")
             .limit(parseInt(limit))
             .get();
+
+          if (sortedSnapshot.docs.length > 0) {
+            paiementsSnapshot = sortedSnapshot;
+          }
         } catch (orderByError) {
-          // Garder la requête simple si orderBy échoue
+          console.log(
+            "⚠️ getStudentPayments - Erreur orderBy date, utilisation de la liste non triée:",
+            orderByError.message,
+          );
+          // Si orderBy échoue, on continue avec paiementsSnapshot déjà peuplé
         }
       }
 
       const paiements = [];
-      paiementsSnapshot.docs.forEach(doc => {
+      paiementsSnapshot.docs.forEach((doc) => {
         const paiement = { id: doc.id, ...doc.data() };
         paiements.push(paiement);
       });
@@ -406,17 +518,16 @@ class StudentPortalController {
             page: parseInt(page),
             limit: parseInt(limit),
             total: totalSnapshot.size,
-            totalPages: Math.ceil(totalSnapshot.size / limit)
-          }
-        }
+            totalPages: Math.ceil(totalSnapshot.size / limit),
+          },
+        },
       });
-
     } catch (error) {
       console.error("Erreur lors de la récupération des paiements:", error);
       return res.status(500).json({
         status: false,
         message: "Erreur lors de la récupération des paiements",
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -429,39 +540,41 @@ class StudentPortalController {
     try {
       const userId = req.user.id;
       const userRole = req.user.role;
-      
+
       let etudiantId;
-      
+
       if (userRole === "parent") {
         // Pour un parent, trouver l'étudiant lié
         const usersCollection = db.collection("users");
         const parentDoc = await usersCollection.doc(userId).get();
-        
+
         if (!parentDoc.exists) {
           return res.status(404).json({
             status: false,
-            message: "Parent non trouvé"
+            message: "Parent non trouvé",
           });
         }
-        
+
         const parentData = parentDoc.data();
         const linkedEtudiantId = parentData.etudiant_id;
-        
+
         if (!linkedEtudiantId) {
           return res.status(404).json({
             status: false,
-            message: "Aucun étudiant lié à ce parent"
+            message: "Aucun étudiant lié à ce parent",
           });
         }
-        
-        const etudiantDoc = await this.etudiantsCollection.doc(linkedEtudiantId).get();
+
+        const etudiantDoc = await this.etudiantsCollection
+          .doc(linkedEtudiantId)
+          .get();
         if (!etudiantDoc.exists) {
           return res.status(404).json({
             status: false,
-            message: "Étudiant lié non trouvé"
+            message: "Étudiant lié non trouvé",
           });
         }
-        
+
         etudiantId = etudiantDoc.id;
       } else {
         // Pour un étudiant, trouver l'étudiant correspondant à cet utilisateur
@@ -472,44 +585,74 @@ class StudentPortalController {
         if (etudiantSnapshot.empty) {
           return res.status(404).json({
             status: false,
-            message: "Étudiant non trouvé pour cet utilisateur"
+            message: "Étudiant non trouvé pour cet utilisateur",
           });
         }
-        
+
         etudiantId = etudiantSnapshot.docs[0].id;
       }
 
       // Récupérer les factures
-      let facturesSnapshot = await this.facturesCollection
-        .where("etudiant_id", "==", etudiantId)
-        .orderBy("date_emission", "desc")
-        .get();
+      let facturesSnapshot = { docs: [] };
+      try {
+        facturesSnapshot = await this.facturesCollection
+          .where("etudiant_id", "==", etudiantId)
+          .orderBy("date_emission", "desc")
+          .get();
+      } catch (queryError) {
+        console.log(
+          "⚠️ getStudentInvoices - Erreur query factures (etudiant_id + orderBy), essai sans orderBy:",
+          queryError.message,
+        );
+        try {
+          facturesSnapshot = await this.facturesCollection
+            .where("etudiant_id", "==", etudiantId)
+            .get();
+        } catch (fallbackError) {
+          console.error(
+            "❌ getStudentInvoices - Erreur fallback factures:",
+            fallbackError.message,
+          );
+        }
+      }
 
       // Si aucune facture trouvée, essayer avec l'ID standard
       if (facturesSnapshot.docs.length === 0) {
         // Récupérer les données de l'étudiant pour construire l'ID standard
-        const etudiantDoc = await this.etudiantsCollection.doc(etudiantId).get();
+        const etudiantDoc = await this.etudiantsCollection
+          .doc(etudiantId)
+          .get();
         if (etudiantDoc.exists) {
           const etudiantData = etudiantDoc.data();
           const stdId = `std-${etudiantData.prenom?.toLowerCase()}-${etudiantData.nom?.toLowerCase()}`;
           console.log("🔍 Invoices - Essai avec ID standard:", stdId);
-          
+
           try {
             facturesSnapshot = await this.facturesCollection
               .where("etudiant_id", "==", stdId)
               .orderBy("date_emission", "desc")
               .get();
           } catch (orderByError) {
-            // Si orderBy échoue, essayer sans orderBy
-            facturesSnapshot = await this.facturesCollection
-              .where("etudiant_id", "==", stdId)
-              .get();
+            console.log(
+              "⚠️ getStudentInvoices - Erreur query factures (stdId + orderBy), essai sans orderBy:",
+              orderByError.message,
+            );
+            try {
+              facturesSnapshot = await this.facturesCollection
+                .where("etudiant_id", "==", stdId)
+                .get();
+            } catch (stdFallbackError) {
+              console.error(
+                "❌ getStudentInvoices - Erreur fallback factures stdId:",
+                stdFallbackError.message,
+              );
+            }
           }
         }
       }
 
       const factures = [];
-      facturesSnapshot.docs.forEach(doc => {
+      facturesSnapshot.docs.forEach((doc) => {
         const facture = { id: doc.id, ...doc.data() };
         factures.push(facture);
       });
@@ -517,15 +660,14 @@ class StudentPortalController {
       return res.status(200).json({
         status: true,
         message: "Factures récupérées avec succès",
-        data: factures
+        data: factures,
       });
-
     } catch (error) {
       console.error("Erreur lors de la récupération des factures:", error);
       return res.status(500).json({
         status: false,
         message: "Erreur lors de la récupération des factures",
-        error: error.message
+        error: error.message,
       });
     }
   }

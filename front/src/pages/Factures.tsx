@@ -17,57 +17,93 @@ const Factures: React.FC = () => {
   const list: Facture[] = (data && (data as { data?: Facture[] }).data) || [];
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-semibold mb-4">Factures</h1>
-      <table className="min-w-full bg-white">
-        <thead>
-          <tr>
-            <th className="px-4 py-2 text-left">Numéro</th>
-            <th className="px-4 py-2 text-left">Étudiant</th>
-            <th className="px-4 py-2 text-left">Montant total</th>
-            <th className="px-4 py-2 text-left">Montant payé</th>
-            <th className="px-4 py-2 text-left">Montant restant</th>
-            <th className="px-4 py-2 text-left">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.length > 0 ? (
-            list.map((f: Facture) => (
-              <tr key={f.id} className="border-t">
-                <td className="px-4 py-2">
-                  {(f as unknown as { numero?: string }).numero ?? f.id}
-                </td>
-                <td className="px-4 py-2">
-                  {(f as unknown as { etudiant?: { nom?: string } }).etudiant
-                    ?.nom ?? "-"}
-                </td>
-                <td className="px-4 py-2">
-                  {(f as unknown as { montant_total?: number | string })
-                    .montant_total ?? "-"}
-                </td>
-                <td className="px-4 py-2">
-                  {(f as unknown as { montantPaye?: number }).montantPaye ?? 0}
-                </td>
-                <td className="px-4 py-2">
-                  {(f as unknown as { montantRestant?: number })
-                    .montantRestant ?? 0}
-                </td>
-                <td className="px-4 py-2">
-                  <Link to={`/factures/${f.id}`} className="text-blue-600">
-                    Voir
-                  </Link>
+    <div className="p-4 md:p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+            Factures
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Gérez et consultez les factures des étudiants
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-md border overflow-x-auto bg-card shadow-sm">
+        <table className="min-w-full divide-y divide-border">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Numéro
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Étudiant
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Montant total
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">
+                Montant payé
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Montant restant
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-card divide-y divide-border">
+            {list.length > 0 ? (
+              list.map((f: Facture) => (
+                <tr key={f.id} className="hover:bg-muted/50 transition-colors">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                    {(f as unknown as { numero?: string }).numero ?? f.id}
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm">
+                    <div className="font-medium text-foreground">
+                      {(f as unknown as { etudiant?: { nom?: string } })
+                        .etudiant?.nom ?? "-"}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-right">
+                    {(f as unknown as { montant_total?: number | string })
+                      .montant_total ?? "-"}{" "}
+                    MAD
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-right hidden sm:table-cell">
+                    {(f as unknown as { montantPaye?: number }).montantPaye ??
+                      0}{" "}
+                    MAD
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-right font-semibold text-orange-600">
+                    {(f as unknown as { montantRestant?: number })
+                      .montantRestant ?? 0}{" "}
+                    MAD
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-center">
+                    <Link
+                      to={`/factures/${f.id}`}
+                      className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2"
+                    >
+                      Voir
+                    </Link>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="px-4 py-8 text-center text-sm text-muted-foreground"
+                >
+                  Aucune facture trouvée.
                 </td>
               </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan={6} className="px-4 py-2">
-                Aucune facture trouvée.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

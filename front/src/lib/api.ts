@@ -3,19 +3,21 @@ import axios, { AxiosHeaders, type AxiosRequestHeaders } from "axios";
 // Configuration de l'URL de base
 // En développement : utilise le proxy Vite
 // En production : utilise VITE_API_BASE_URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/gestionadminastration/us-central1/api/v1";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  "/gestionadminastration/us-central1/api/v1";
 
 // Forcer l'utilisation du proxy en développement
 const isDevelopment = import.meta.env.DEV;
-const finalBaseURL = isDevelopment ? "/gestionadminastration/us-central1/api/v1" : API_BASE_URL;
+const finalBaseURL = isDevelopment
+  ? "/gestionadminastration/us-central1/api/v1"
+  : API_BASE_URL;
 
 const axiosInstance = axios.create({
   baseURL: finalBaseURL,
   // Do not force a global Content-Type header here. Some requests (FormData) must let the browser set the proper multipart boundary.
   withCredentials: false,
-  timeout: 10000, // 10 secondes de timeout pour les émulateurs
-  retry: 3, // Nombre de tentatives
-  retryDelay: 1000, // Délai entre les tentatives
+  timeout: 15000, // 15 secondes de timeout pour les émulateurs (plus robuste)
 });
 
 // Log pour diagnostiquer les problèmes de connexion
@@ -28,7 +30,7 @@ console.log("VITE_API_BASE_URL:", import.meta.env.VITE_API_BASE_URL);
 // Function to get new access token using refresh token
 export const refreshAccessToken = async () => {
   try {
-    const refreshToken = localStorage.getItem("refreshToken");
+    const refreshToken = sessionStorage.getItem("refreshToken");
     if (!refreshToken) {
       throw new Error("No refresh token available");
     }
@@ -38,16 +40,16 @@ export const refreshAccessToken = async () => {
     });
     // Backend renvoie { data: { accessToken, refreshToken } }
     const { accessToken, refreshToken: refreshedToken } = response.data.data;
-    localStorage.setItem("token", accessToken); // Update access token
+    sessionStorage.setItem("token", accessToken); // Update access token
     if (refreshedToken) {
-      localStorage.setItem("refreshToken", refreshedToken); // Update refresh token if rotated
+      sessionStorage.setItem("refreshToken", refreshedToken); // Update refresh token if rotated
     }
     return accessToken;
   } catch (error) {
     console.error("Error refreshing access token:", error);
-    localStorage.removeItem("user");
-    localStorage.removeItem("token");
-    localStorage.removeItem("refreshToken");
+    sessionStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("refreshToken");
     // Optionally redirect to login page
     window.location.href = "/login";
     throw error;
@@ -59,11 +61,11 @@ axiosInstance.interceptors.request.use(
   async (config) => {
     console.log("🚀 Making request to:", config.url);
     console.log("📡 Full URL:", `${config.baseURL}${config.url}`);
-    
-    const token = localStorage.getItem("token");
+
+    const token = sessionStorage.getItem("token");
     console.log(
       "Frontend Interceptor - Retrieved Token:",
-      token ? "Token exists" : "No token"
+      token ? "Token exists" : "No token",
     );
     if (token) {
       // Ensure headers exist and set Authorization in a type-safe way
@@ -73,35 +75,34 @@ axiosInstance.interceptors.request.use(
       if (config.headers instanceof AxiosHeaders) {
         (config.headers as AxiosHeaders).set(
           "Authorization",
-          `Bearer ${token}`
+          `Bearer ${token}`,
         );
       } else {
-        (config.headers as unknown as Record<string, string>)[
-          "Authorization"
-        ] = `Bearer ${token}`;
+        (config.headers as unknown as Record<string, string>)["Authorization"] =
+          `Bearer ${token}`;
       }
       console.log(
         "Frontend Interceptor - Setting Authorization header:",
-        (config.headers as Record<string, string>)["Authorization"]
+        (config.headers as Record<string, string>)["Authorization"],
       );
     }
     // No cookies/session-based auth; keep credentials disabled
     config.withCredentials = false;
-    
+
     // Ajouter un timestamp pour éviter le cache
-    if (config.method === 'get') {
+    if (config.method === "get") {
       config.params = {
         ...config.params,
-        _t: Date.now()
+        _t: Date.now(),
       };
     }
-    
+
     return config;
   },
   (error) => {
     console.error("❌ Request interceptor error:", error);
     return Promise.reject(error);
-  }
+  },
 );
 
 // Response interceptor for handling token expiration and refreshing
@@ -118,23 +119,14 @@ axiosInstance.interceptors.response.use(
       url: error.config?.url,
       baseURL: error.config?.baseURL,
       code: error.code,
-      timeout: error.code === 'ECONNABORTED'
+      timeout: error.code === "ECONNABORTED",
     });
-    
+
     // Gérer les timeouts et erreurs de connexion
-    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-      console.log("⏰ Timeout détecté, vérification de l'émulateur...");
-      
-      // Tester la connectivité avant de retenter
-      const connectivity = await testConnectivity();
-      if (!connectivity.success) {
-        console.error("❌ Émulateur non accessible, arrêt des tentatives");
-        return Promise.reject(new Error("Émulateur Firebase non accessible. Vérifiez que l'émulateur est démarré."));
-      }
-      
-      console.log("✅ Émulateur accessible, retry de la requête...");
-      // Attendre un peu avant de retenter
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    if (error.code === "ECONNABORTED" || error.message.includes("timeout")) {
+      console.warn(
+        "⏰ Timeout détecté - vérifiez que l'émulateur Firebase est démarré (firebase emulators:start)",
+      );
     }
     const originalRequest = error.config;
     const status = error.response?.status;
@@ -145,14 +137,17 @@ axiosInstance.interceptors.response.use(
     // Déconnexion immédiate si le backend indique un token expiré ou un compte inactif
     if (
       (status === 401 || status === 403) &&
-      (code === "TOKEN_EXPIRED" || code === "ACCOUNT_INACTIVE" || /token\s*expir/i.test(String(message)))
+      (code === "TOKEN_EXPIRED" ||
+        code === "ACCOUNT_INACTIVE" ||
+        /token\s*expir/i.test(String(message)))
     ) {
       try {
-        localStorage.removeItem("user");
-        localStorage.removeItem("token");
-        localStorage.removeItem("refreshToken");
+        sessionStorage.removeItem("user");
+        sessionStorage.removeItem("token");
+        sessionStorage.removeItem("refreshToken");
       } finally {
-        if (window.location.pathname !== "/login") {
+        const path = window.location.pathname;
+        if (path !== "/login" && path !== "/logout") {
           window.location.href = "/login";
         }
       }
@@ -172,7 +167,7 @@ axiosInstance.interceptors.response.use(
       }
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 // Utilisation pour GET
@@ -186,7 +181,7 @@ export const fetcher = async (url: string) => {
 export const apiRequest = async (
   url: string,
   method: "GET" | "POST" | "PUT" | "DELETE" = "GET",
-  data?: Record<string, unknown>
+  data?: Record<string, unknown>,
 ) => {
   // Build config dynamically so we can handle FormData correctly
   const config: {
@@ -213,69 +208,57 @@ export const apiRequest = async (
   return response.data;
 };
 
-// Fonction pour tester la connectivité avec l'émulateur
+// Fonction pour tester la connectivité avec l'émulateur (via le proxy Vite)
 export const testConnectivity = async () => {
-  const endpoints = [
-    "/gestionadminastration/us-central1/api/v1/health",
-    "http://127.0.0.1:5001/gestionadminastration/us-central1/api/v1/health",
-    "http://localhost:5001/gestionadminastration/us-central1/api/v1/health"
-  ];
-
-  for (const endpoint of endpoints) {
-    try {
-      console.log(`🔍 Test de connectivité vers: ${endpoint}`);
-      const response = await axios.get(endpoint, {
-        timeout: 3000
-      });
-      console.log("✅ Émulateur accessible:", response.status);
-      return { success: true, status: response.status, data: response.data, endpoint };
-    } catch (error) {
-      console.log(`❌ Échec pour ${endpoint}:`, error.message);
-      continue;
-    }
+  try {
+    console.log(`🔍 Test de connectivité vers l'API...`);
+    // Utilise l'instance axios configurée (passe par le proxy Vite)
+    const response = await axiosInstance.get("/health", { timeout: 5000 });
+    console.log("✅ API accessible:", response.status);
+    return { success: true, status: response.status, data: response.data };
+  } catch (error: any) {
+    console.warn(`⚠️ API non accessible:`, error.message);
+    return {
+      success: false,
+      error: error.message,
+      code: "NO_API",
+    };
   }
-  
-  console.error("❌ Aucun émulateur accessible");
-  return { 
-    success: false, 
-    error: "Aucun émulateur Firebase accessible", 
-    code: 'NO_EMULATOR',
-    suggestions: [
-      "Vérifiez que l'émulateur Firebase est démarré",
-      "Exécutez: firebase emulators:start",
-      "Vérifiez le port 5001",
-      "Vérifiez la configuration Firebase"
-    ]
-  };
 };
 
 // Fonction pour tester le diagnostic complet
 export const testDiagnostic = async () => {
   try {
     console.log("🔍 Test de diagnostic complet...");
-    const response = await axios.get("/gestionadminastration/us-central1/api/v1/diagnostic", {
-      timeout: 10000
-    });
+    const response = await axios.get(
+      "/gestionadminastration/us-central1/api/v1/diagnostic",
+      {
+        timeout: 10000,
+      },
+    );
     console.log("✅ Diagnostic complet:", response.data);
     return { success: true, data: response.data };
   } catch (error) {
     console.error("❌ Diagnostic échoué:", error.message);
-    return { 
-      success: false, 
-      error: error.message, 
-      code: error.code 
+    return {
+      success: false,
+      error: error.message,
+      code: error.code,
     };
   }
 };
 
 // Test automatique de connectivité au chargement avec gestion d'erreur améliorée
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   setTimeout(async () => {
     const result = await testConnectivity();
     if (!result.success) {
-      console.warn("⚠️ Émulateur non accessible. Vérifiez que Firebase Emulator est démarré.");
+      console.warn(
+        "⚠️ Émulateur non accessible. Vérifiez que Firebase Emulator est démarré.",
+      );
       console.log("💡 Solutions possibles:");
-      result.suggestions?.forEach(suggestion => console.log(`   - ${suggestion}`));
+      console.log("   - Vérifiez la connexion internet");
+      console.log("   - Relancez les émulateurs (firebase emulators:start)");
     }
   }, 1000);
 }

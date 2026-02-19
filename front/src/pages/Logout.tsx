@@ -5,13 +5,18 @@ import { useAuth } from "@/contexts/AuthContext";
 const Logout = () => {
   const navigate = useNavigate();
   const { logout } = useAuth();
-  
+
   useEffect(() => {
     // Utiliser la fonction logout du contexte pour une déconnexion complète
     logout();
-    navigate("/login");
+    // Utiliser setTimeout pour laisser le temps au contexte de se mettre à jour
+    // et éviter les recharges de page intempestives via les intercepteurs API
+    const timer = setTimeout(() => {
+      navigate("/login", { replace: true });
+    }, 100);
+    return () => clearTimeout(timer);
   }, [navigate, logout]);
-  
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-secondary">
       <div className="flex flex-col items-center gap-4">

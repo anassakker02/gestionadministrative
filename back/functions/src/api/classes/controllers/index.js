@@ -104,7 +104,8 @@ class ClasseController {
       const pageNumber = parseInt(page);
       const limitNumber = parseInt(limit);
 
-      let query = this.collection.orderBy('niveau').orderBy('nom');
+      // Pas de orderBy composite pour éviter le besoin d'index Firestore
+      let query = this.collection;
 
       // Filtres
       if (niveau) {
@@ -115,15 +116,25 @@ class ClasseController {
         query = query.where('annee_scolaire', '==', annee_scolaire);
       }
 
-      // Recherche par nom
+      // Recherche par nom (nécessite orderBy sur le même champ)
       if (search && search.trim()) {
-        query = query.where('nom', '>=', search.trim())
+        query = query.orderBy('nom')
+          .where('nom', '>=', search.trim())
           .where('nom', '<=', search.trim() + '\uf8ff');
       }
 
-      // Pagination
+      // Récupérer tous les docs puis trier/paginer en mémoire
+      const allSnapshot = await query.get();
+      const allDocs = allSnapshot.docs.sort((a, b) => {
+        const aN = a.data().niveau || '';
+        const bN = b.data().niveau || '';
+        if (aN !== bN) return aN.localeCompare(bN);
+        return (a.data().nom || '').localeCompare(b.data().nom || '');
+      });
       const offset = (pageNumber - 1) * limitNumber;
-      const snapshot = await query.limit(limitNumber).offset(offset).get();
+      const paginatedDocs = allDocs.slice(offset, offset + limitNumber);
+      // Simuler un snapshot avec les docs paginés
+      const snapshot = { docs: paginatedDocs };
 
       const classes = [];
       

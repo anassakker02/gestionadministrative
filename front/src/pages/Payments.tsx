@@ -34,6 +34,7 @@ import {
   CheckCircle,
   Clock,
   Printer,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -69,9 +70,16 @@ import { Student } from "@/types/student";
 import StudentPaymentsAndInvoices from "@/components/StudentPaymentsAndInvoices";
 import StudentNameDisplay from "@/components/StudentNameDisplay";
 import PaymentStudentInfo from "@/components/PaymentStudentInfo";
-import { useForm } from 'react-hook-form';
-import * as z from 'zod';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 
 // Helpers globaux (stables) pour lire des champs hétérogènes et parser des dates/numériques
 const getStringField = (obj: unknown, keys: string[]) => {
@@ -259,7 +267,7 @@ export default function Payments() {
       } else if (
         typeof paymentsData.data === "object" &&
         Array.isArray(
-          (paymentsData.data as { paiements?: Paiement[] }).paiements
+          (paymentsData.data as { paiements?: Paiement[] }).paiements,
         )
       ) {
         acc.push(...(paymentsData.data as { paiements: Paiement[] }).paiements);
@@ -361,7 +369,7 @@ export default function Payments() {
   const [paymentActor, setPaymentActor] = useState<User | null>(null);
   const [isLoadingPaymentActor, setIsLoadingPaymentActor] = useState(false);
   const [paymentActorError, setPaymentActorError] = useState<string | null>(
-    null
+    null,
   );
   const [paymentPayerId, setPaymentPayerId] = useState<string | null>(null);
   const [paymentPayerName, setPaymentPayerName] = useState<string | null>(null);
@@ -371,7 +379,7 @@ export default function Payments() {
     due: number,
     paid: number,
     remaining: number,
-    warning?: string
+    warning?: string,
   ): string {
     const _due = Number.isFinite(due) ? due : 0;
     const _paid = Number.isFinite(paid) ? paid : 0;
@@ -417,7 +425,7 @@ export default function Payments() {
 
   // Extrait un pourcentage de bourse (0..1) si présent; sinon 0.
   const getBoursePercent = (
-    rec: Record<string, unknown> | undefined
+    rec: Record<string, unknown> | undefined,
   ): number => {
     if (!rec) return 0;
     const numCandidates = [
@@ -446,7 +454,7 @@ export default function Payments() {
 
   // Extrait un montant de réduction absolue éventuel
   const getBourseAmount = (
-    rec: Record<string, unknown> | undefined
+    rec: Record<string, unknown> | undefined,
   ): number => {
     if (!rec) return 0;
     const v = rec["montant"];
@@ -479,8 +487,8 @@ export default function Payments() {
       })
       .filter((t) =>
         ["Scolarité", "Autres frais"].includes(
-          typeof t.type === "string" ? (t.type as string) : ""
-        )
+          typeof t.type === "string" ? (t.type as string) : "",
+        ),
       )
       .reduce((sum, t) => sum + (Number(t.montant) || 0), 0);
 
@@ -604,7 +612,7 @@ export default function Payments() {
       acc[key].push(p);
       return acc;
     },
-    {}
+    {},
   );
 
   // (déplacé plus bas, proche du JSX)
@@ -734,7 +742,7 @@ export default function Payments() {
           ? `${stu.nom || ""} ${stu.prenom || ""}`.trim()
           : "";
         const created = fmtDate(
-          getDateField(inv as unknown, ["createdAt", "created_at", "date"])
+          getDateField(inv as unknown, ["createdAt", "created_at", "date"]),
         );
         const invNum = inv.numero || "FAC-" + String(inv.id || "").slice(-8);
         return `<tr>
@@ -743,7 +751,7 @@ export default function Payments() {
                 <td>${esc(inv.etudiant_id || "")}</td>
                 <td>${esc(inv.statut || "")}</td>
                 <td style="text-align:right">${esc(
-                  fmtMAD(inv.montant_total || 0)
+                  fmtMAD(inv.montant_total || 0),
                 )}</td>
                 <td>${esc(created)}</td>
               </tr>`;
@@ -765,7 +773,8 @@ export default function Payments() {
             "montant",
           ]) || 0;
         const methode =
-          getStringField(p, ["mode", "methode", "mode_paiement", "method"]) || "";
+          getStringField(p, ["mode", "methode", "mode_paiement", "method"]) ||
+          "";
         const date = fmtDate(
           getDateField(p, [
             "date",
@@ -774,11 +783,11 @@ export default function Payments() {
             "payment_date",
             "paymentDate",
             "createdAt",
-          ])
+          ]),
         );
         return `<tr>
                 <td>${esc(
-                  (p as unknown as Record<string, unknown>).id || ""
+                  (p as unknown as Record<string, unknown>).id || "",
                 )}</td>
                 <td>${esc(stuName)}</td>
                 <td>${esc(sid)}</td>
@@ -816,18 +825,18 @@ export default function Payments() {
         <body>
           <h1>Export Paiements et Factures</h1>
           <div class="meta">Généré le ${new Date().toLocaleString(
-            "fr-FR"
+            "fr-FR",
           )} • Devise: MAD</div>
           <div class="actions"><button class="btn" onclick="window.print()">Imprimer</button></div>
           <div class="summary">
             <div class="card"><div class="label">Total Facturé</div><div class="value">${esc(
-              currencyFormatter.format(totalAmount)
+              currencyFormatter.format(totalAmount),
             )}</div></div>
             <div class="card"><div class="label">Montant Encaissé</div><div class="value">${esc(
-              currencyFormatter.format(paidAmount)
+              currencyFormatter.format(paidAmount),
             )}</div></div>
             <div class="card"><div class="label">En Attente</div><div class="value">${esc(
-              currencyFormatter.format(pendingAmount)
+              currencyFormatter.format(pendingAmount),
             )}</div></div>
           </div>
 
@@ -891,7 +900,10 @@ export default function Payments() {
       d ? d.toLocaleString("fr-FR") : "";
 
     // Récupérer les informations de l'étudiant
-    const studentId = getStringField(selectedPayment, ["etudiant_id", "student_id"]);
+    const studentId = getStringField(selectedPayment, [
+      "etudiant_id",
+      "student_id",
+    ]);
     const student = studentId ? studentById[studentId] : undefined;
     const studentName = student
       ? `${student.nom || ""} ${student.prenom || ""}`.trim()
@@ -900,7 +912,7 @@ export default function Payments() {
     // Récupérer les factures liées
     const factureIds = selectedPayment.facture_ids || [];
     const relatedInvoices = factureIds
-      .map(id => invoiceById[id])
+      .map((id) => invoiceById[id])
       .filter(Boolean);
 
     const html = `<!doctype html>
@@ -1061,7 +1073,9 @@ export default function Payments() {
                 <span class="label">ID Étudiant:</span>
                 <span class="value">${esc(studentId || "N/A")}</span>
               </div>
-              ${student ? `
+              ${
+                student
+                  ? `
                 <div class="info-item">
                   <span class="label">Classe:</span>
                   <span class="value">${esc(getStringField(student, ["classe", "classe_nom"]) || "N/A")}</span>
@@ -1070,7 +1084,9 @@ export default function Payments() {
                   <span class="label">Email:</span>
                   <span class="value">${esc(getStringField(student, ["email"]) || "N/A")}</span>
                 </div>
-              ` : ''}
+              `
+                  : ""
+              }
             </div>
           </div>
 
@@ -1100,10 +1116,14 @@ export default function Payments() {
             </div>
           </div>
 
-          ${relatedInvoices.length > 0 ? `
+          ${
+            relatedInvoices.length > 0
+              ? `
             <div class="info-section">
               <h2>Factures Liées</h2>
-              ${relatedInvoices.map((invoice) => `
+              ${relatedInvoices
+                .map(
+                  (invoice) => `
                 <div class="invoice-item">
                   <div class="invoice-grid">
                     <div>
@@ -1120,41 +1140,59 @@ export default function Payments() {
                     </div>
                   </div>
                 </div>
-              `).join('')}
+              `,
+                )
+                .join("")}
             </div>
-          ` : ''}
+          `
+              : ""
+          }
 
           ${(() => {
             const details = selectedPayment.details;
-            const description = getStringField(selectedPayment, ["description"]);
+            const description = getStringField(selectedPayment, [
+              "description",
+            ]);
             const notes = getStringField(selectedPayment, ["notes"]);
-            
+
             if (details || description || notes) {
               return `
                 <div class="details-section">
                   <h2>Détails Supplémentaires</h2>
-                  ${description ? `
+                  ${
+                    description
+                      ? `
                     <div style="margin-bottom: 10px;">
                       <span class="label">Description:</span>
                       <p style="margin: 5px 0; padding: 8px; background-color: #f8f9fa; border-radius: 4px;">${esc(description)}</p>
                     </div>
-                  ` : ''}
-                  ${notes ? `
+                  `
+                      : ""
+                  }
+                  ${
+                    notes
+                      ? `
                     <div style="margin-bottom: 10px;">
                       <span class="label">Notes:</span>
                       <p style="margin: 5px 0; padding: 8px; background-color: #f8f9fa; border-radius: 4px;">${esc(notes)}</p>
                     </div>
-                  ` : ''}
-                  ${details && typeof details === "object" ? `
+                  `
+                      : ""
+                  }
+                  ${
+                    details && typeof details === "object"
+                      ? `
                     <div>
                       <span class="label">Détails techniques:</span>
                       <pre style="margin: 5px 0; padding: 8px; background-color: #f8f9fa; border-radius: 4px; font-size: 0.8em; overflow-x: auto;">${esc(JSON.stringify(details, null, 2))}</pre>
                     </div>
-                  ` : ''}
+                  `
+                      : ""
+                  }
                 </div>
               `;
             }
-            return '';
+            return "";
           })()}
         </body>
       </html>`;
@@ -1217,7 +1255,7 @@ export default function Payments() {
             setSelectedPayment((prev) =>
               prev
                 ? ({ ...prev, montantPaye: fallbackAmount } as Paiement)
-                : prev
+                : prev,
             );
           }
         }
@@ -1301,10 +1339,10 @@ export default function Payments() {
         setPaymentActorError(srvMsg || "Utilisateur non trouvé");
       } else if (status === 403) {
         console.warn(
-          `Not allowed to fetch user ${resolvedUserId} (403). Current account needs admin role.`
+          `Not allowed to fetch user ${resolvedUserId} (403). Current account needs admin role.`,
         );
         setPaymentActorError(
-          srvMsg || "Accès refusé pour récupérer l'utilisateur"
+          srvMsg || "Accès refusé pour récupérer l'utilisateur",
         );
       } else {
         console.error("Failed to fetch payment actor", err);
@@ -1376,14 +1414,14 @@ export default function Payments() {
               "statut"
             ] as string;
             const paid = Number(
-              (inv as unknown as Record<string, unknown>)["montantPaye"] ?? 0
+              (inv as unknown as Record<string, unknown>)["montantPaye"] ?? 0,
             );
             const total = Number(
-              (inv as unknown as Record<string, unknown>)["montant_total"] ?? 0
+              (inv as unknown as Record<string, unknown>)["montant_total"] ?? 0,
             );
             const remaining = Number(
               (inv as unknown as Record<string, unknown>)["montantRestant"] ??
-                total - paid
+                total - paid,
             );
             return (statut !== "payée" && remaining > 0) || remaining > 0;
           })
@@ -1420,7 +1458,7 @@ export default function Payments() {
         const hasAnyLinkedInvoices = Array.isArray(
           (apiPaymentData as Record<string, unknown>)[
             "facture_ids"
-          ] as unknown[]
+          ] as unknown[],
         )
           ? (
               (apiPaymentData as Record<string, unknown>)[
@@ -1452,7 +1490,7 @@ export default function Payments() {
               payment_id: createdPaymentResponse.data.id,
               qui_a_paye: String(paymentBase.qui_a_paye || user?.id || ""),
               enregistre_par: String(
-                paymentBase.enregistre_par || user?.id || ""
+                paymentBase.enregistre_par || user?.id || "",
               ),
             };
 
@@ -1515,7 +1553,7 @@ export default function Payments() {
   // - pendingAmount: total facturé - encaissé (>= 0)
   const totalAmount = invoices.reduce(
     (sum, invoice) => sum + (Number(invoice.montant_total) || 0),
-    0
+    0,
   );
   const paidAmount = payments.reduce((sum, p) => {
     const n = getNumberField(p as unknown, [
@@ -1551,7 +1589,7 @@ export default function Payments() {
     const head = keys.join(",");
     const body = rows
       .map((r) =>
-        keys.map((k) => esc((r as Record<string, unknown>)[k])).join(",")
+        keys.map((k) => esc((r as Record<string, unknown>)[k])).join(","),
       )
       .join("\n");
     return `${head}\n${body}`;
@@ -1577,7 +1615,7 @@ export default function Payments() {
     ]);
     downloadBlob(
       new Blob([facturesCsv], { type: "text/csv;charset=utf-8;" }),
-      `export_factures_${new Date().toISOString().slice(0, 10)}.csv`
+      `export_factures_${new Date().toISOString().slice(0, 10)}.csv`,
     );
 
     // Paiements CSV
@@ -1591,7 +1629,8 @@ export default function Payments() {
           "amount",
           "montant",
         ]) || 0,
-      methode: getStringField(p, ["mode", "methode", "mode_paiement", "method"]) || "",
+      methode:
+        getStringField(p, ["mode", "methode", "mode_paiement", "method"]) || "",
       date:
         getDateField(p, [
           "date",
@@ -1609,7 +1648,7 @@ export default function Payments() {
     ]);
     downloadBlob(
       new Blob([paiementsCsv], { type: "text/csv;charset=utf-8;" }),
-      `export_paiements_${new Date().toISOString().slice(0, 10)}.csv`
+      `export_paiements_${new Date().toISOString().slice(0, 10)}.csv`,
     );
   };
 
@@ -1630,7 +1669,7 @@ export default function Payments() {
         ?.toLowerCase()
         .includes(searchTerm.toLowerCase()) ||
       String(getNumberField(payment, ["montantPaye", "montant_paye"])).includes(
-        searchTerm
+        searchTerm,
       );
 
     const matchesStatus =
@@ -1679,8 +1718,12 @@ export default function Payments() {
 
       // Méthode
       const method =
-        getStringField(p as unknown, ["mode", "methode", "mode_paiement", "method"]) ||
-        "";
+        getStringField(p as unknown, [
+          "mode",
+          "methode",
+          "mode_paiement",
+          "method",
+        ]) || "";
       if (
         filterMethod !== "all" &&
         filterMethod &&
@@ -1759,7 +1802,7 @@ export default function Payments() {
     selectedStudentForDetails
       ? (() => {
           const found = studentsWithPayment.find(
-            (s: StudentWithPayment) => s.id === selectedStudentForDetails.id
+            (s: StudentWithPayment) => s.id === selectedStudentForDetails.id,
           );
           if (!found) return selectedStudentForDetails;
           const rec = found as unknown as Record<string, unknown>;
@@ -1841,19 +1884,23 @@ export default function Payments() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex justify-between items-center"
+        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
       >
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">
             Gestion des Paiements
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm md:text-base text-muted-foreground">
             Suivez les paiements et factures de vos étudiants
           </p>
         </div>
         {canManagePayments && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleExportPDF}>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              onClick={handleExportPDF}
+              className="flex-1 sm:flex-none"
+            >
               <Download className="mr-2 h-4 w-4" />
               Exporter PDF
             </Button>
@@ -1944,7 +1991,7 @@ export default function Payments() {
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-full sm:w-[180px]">
                 <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
                 <SelectValue placeholder="Filtrer par statut" />
               </SelectTrigger>
@@ -1986,7 +2033,9 @@ export default function Payments() {
                           name="paymentDateFrom"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-xs text-muted-foreground">Date de</FormLabel>
+                              <FormLabel className="text-xs text-muted-foreground">
+                                Date de
+                              </FormLabel>
                               <FormControl>
                                 <Input type="date" {...field} />
                               </FormControl>
@@ -1999,7 +2048,9 @@ export default function Payments() {
                           name="paymentDateTo"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-xs text-muted-foreground">Date à</FormLabel>
+                              <FormLabel className="text-xs text-muted-foreground">
+                                Date à
+                              </FormLabel>
                               <FormControl>
                                 <Input type="date" {...field} />
                               </FormControl>
@@ -2012,22 +2063,27 @@ export default function Payments() {
                           name="filterStudentId"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-xs text-muted-foreground">Etudiant</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
+                              <FormLabel className="text-xs text-muted-foreground">
+                                Etudiant
+                              </FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                value={field.value}
+                              >
                                 <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Tous les élèves" />
-                          </SelectTrigger>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Tous les élèves" />
+                                  </SelectTrigger>
                                 </FormControl>
-                          <SelectContent>
-                            <SelectItem value="all">Tous</SelectItem>
-                            {students.map((s) => (
-                              <SelectItem key={s.id} value={String(s.id)}>
-                                {(s.nom || "") + " " + (s.prenom || "")}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                                <SelectContent>
+                                  <SelectItem value="all">Tous</SelectItem>
+                                  {students.map((s) => (
+                                    <SelectItem key={s.id} value={String(s.id)}>
+                                      {(s.nom || "") + " " + (s.prenom || "")}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -2037,97 +2093,119 @@ export default function Payments() {
                           name="filterMethod"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-xs text-muted-foreground">Méthode</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
+                              <FormLabel className="text-xs text-muted-foreground">
+                                Méthode
+                              </FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                value={field.value}
+                              >
                                 <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Toutes les méthodes" />
-                          </SelectTrigger>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Toutes les méthodes" />
+                                  </SelectTrigger>
                                 </FormControl>
-                          <SelectContent>
-                            <SelectItem value="all">Toutes</SelectItem>
-                            {availableMethods.map((m) => (
-                              <SelectItem key={m} value={m}>
-                                {m}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                                <SelectContent>
+                                  <SelectItem value="all">Toutes</SelectItem>
+                                  {availableMethods.map((m) => (
+                                    <SelectItem key={m} value={m}>
+                                      {m}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
                       </form>
                     </Form>
-                    <div className="rounded-md border overflow-hidden">
+                    <div className="rounded-md border overflow-x-auto">
                       <Table className="min-w-full divide-y divide-border">
                         <TableHeader className="bg-muted/50">
-                        <TableRow>
-                            <TableHead className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0">ID Étudiant</TableHead>
-                            <TableHead className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0">Nom</TableHead>
-                            <TableHead className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0">Frais Net Dû</TableHead>
-                            <TableHead className="h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {visiblePayments.map((payment) => {
-                          const student =
-                            studentById[
-                              getStringField(payment, [
-                                "etudiant_id",
-                                "student_id",
-                              ]) || ""
-                            ];
-                          const studentName = student
-                            ? `${student.nom || ""} ${
-                                student.prenom || ""
-                              }`.trim()
-                            : "N/A";
-                          const status = getStringField(payment, ["status"]);
-                          const statusConfigEntry =
-                            status &&
-                            status in statusConfig &&
-                            statusConfig[status as keyof typeof statusConfig];
-                          const StatusIcon = statusConfigEntry?.icon;
+                          <TableRow>
+                            <TableHead className="hidden sm:table-cell h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+                              ID Étudiant
+                            </TableHead>
+                            <TableHead className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+                              Nom
+                            </TableHead>
+                            <TableHead className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+                              Frais Net Dû
+                            </TableHead>
+                            <TableHead className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">
+                              Actions
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {visiblePayments.map((payment) => {
+                            const student =
+                              studentById[
+                                getStringField(payment, [
+                                  "etudiant_id",
+                                  "student_id",
+                                ]) || ""
+                              ];
+                            const studentName = student
+                              ? `${student.nom || ""} ${
+                                  student.prenom || ""
+                                }`.trim()
+                              : "N/A";
+                            const status = getStringField(payment, ["status"]);
+                            const statusConfigEntry =
+                              status &&
+                              status in statusConfig &&
+                              statusConfig[status as keyof typeof statusConfig];
+                            const StatusIcon = statusConfigEntry?.icon;
 
-                          return (
-                            <TableRow
-                              key={payment.id}
-                              onClick={() => openPaymentDetails(payment)}
+                            return (
+                              <TableRow
+                                key={payment.id}
+                                onClick={() => openPaymentDetails(payment)}
                                 className="cursor-pointer border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
-                            >
-                                <TableCell className="p-4 align-middle [&:has([role=checkbox])]:pr-0 font-medium">
-                                <div className="font-mono text-sm">
-                                  {student?.user_id || student?.id || "N/A"}
-                                </div>
-                              </TableCell>
-                                <TableCell className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
-                                <div className="font-medium">
-                                  {student ? `${student.prenom} ${student.nom}` : "Étudiant inconnu"}
-                                </div>
-                              </TableCell>
-                                <TableCell className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
-                                <div className="font-semibold text-green-600">
-                                  {currencyFormatter.format(student?.frais_payment || 0)}
-                                </div>
-                              </TableCell>
-                                <TableCell className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation(); // Prevent row click from opening details again
-                                    openPaymentDetails(payment);
-                                  }}
-                                >
-                                  Détails
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
+                              >
+                                <TableCell className="hidden sm:table-cell p-4 align-middle font-medium">
+                                  <div className="font-mono text-sm">
+                                    {student?.user_id || student?.id || "N/A"}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="p-4 align-middle">
+                                  <div className="font-medium">
+                                    {student
+                                      ? `${student.prenom} ${student.nom}`
+                                      : "Étudiant inconnu"}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="p-4 align-middle">
+                                  <div className="font-semibold text-green-600">
+                                    {currencyFormatter.format(
+                                      student?.frais_payment || 0,
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="p-4 align-middle text-right">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation(); // Prevent row click from opening details again
+                                      openPaymentDetails(payment);
+                                    }}
+                                    className="h-8 w-8 p-0 sm:h-auto sm:w-auto sm:px-3"
+                                    title="Détails"
+                                  >
+                                    <span className="hidden sm:inline">
+                                      Détails
+                                    </span>
+                                    <FileText className="h-4 w-4 sm:hidden" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
                     </div>
 
                     {/* Pagination */}
@@ -2149,7 +2227,7 @@ export default function Payments() {
                         <div className="flex items-center gap-1">
                           {Array.from(
                             { length: totalPages },
-                            (_, i) => i + 1
+                            (_, i) => i + 1,
                           ).map((num) => (
                             <Button
                               key={num}
@@ -2182,30 +2260,40 @@ export default function Payments() {
           )}
 
           {/* Suivi des Paiements Étudiant (aligné sur StudentPaymentsAndInvoices) */}
-          
 
           {/* Search and Filters */}
 
           {/* Modal de détails de paiement */}
-          <Dialog open={isPaymentDetailOpen} onOpenChange={setIsPaymentDetailOpen}>
+          <Dialog
+            open={isPaymentDetailOpen}
+            onOpenChange={setIsPaymentDetailOpen}
+          >
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Détails du Paiement</DialogTitle>
               </DialogHeader>
-              
+
               {selectedPayment && (
                 <div className="space-y-6">
                   {/* Informations générales */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <h3 className="font-semibold text-lg">Informations Générales</h3>
+                      <h3 className="font-semibold text-lg">
+                        Informations Générales
+                      </h3>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">ID Paiement:</span>
-                          <span className="font-medium">{selectedPayment.id || "N/A"}</span>
+                          <span className="text-muted-foreground">
+                            ID Paiement:
+                          </span>
+                          <span className="font-medium">
+                            {selectedPayment.id || "N/A"}
+                          </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Montant:</span>
+                          <span className="text-muted-foreground">
+                            Montant:
+                          </span>
                           <span className="font-medium text-green-600">
                             {currencyFormatter.format(
                               getNumberField(selectedPayment, [
@@ -2213,12 +2301,14 @@ export default function Payments() {
                                 "montant_paye",
                                 "amount",
                                 "montant",
-                              ]) || 0
+                              ]) || 0,
                             )}
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Méthode:</span>
+                          <span className="text-muted-foreground">
+                            Méthode:
+                          </span>
                           <span className="font-medium">
                             {getStringField(selectedPayment, [
                               "mode",
@@ -2231,7 +2321,8 @@ export default function Payments() {
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Statut:</span>
                           <span className="font-medium">
-                            {getStringField(selectedPayment, ["status"]) || "N/A"}
+                            {getStringField(selectedPayment, ["status"]) ||
+                              "N/A"}
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -2257,40 +2348,60 @@ export default function Payments() {
 
                     {/* Informations étudiant */}
                     <div className="space-y-2">
-                      <h3 className="font-semibold text-lg">Informations Étudiant</h3>
+                      <h3 className="font-semibold text-lg">
+                        Informations Étudiant
+                      </h3>
                       <div className="space-y-2 text-sm">
                         {(() => {
                           const studentId = getStringField(selectedPayment, [
                             "etudiant_id",
                             "student_id",
                           ]);
-                          const student = studentId ? studentById[studentId] : undefined;
+                          const student = studentId
+                            ? studentById[studentId]
+                            : undefined;
                           const studentName = student
                             ? `${student.nom || ""} ${student.prenom || ""}`.trim()
                             : "N/A";
-                          
+
                           return (
                             <>
                               <div className="flex justify-between">
-                                <span className="text-muted-foreground">Nom:</span>
-                                <span className="font-medium">{studentName}</span>
+                                <span className="text-muted-foreground">
+                                  Nom:
+                                </span>
+                                <span className="font-medium">
+                                  {studentName}
+                                </span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-muted-foreground">ID Étudiant:</span>
-                                <span className="font-medium">{studentId || "N/A"}</span>
+                                <span className="text-muted-foreground">
+                                  ID Étudiant:
+                                </span>
+                                <span className="font-medium">
+                                  {studentId || "N/A"}
+                                </span>
                               </div>
                               {student && (
                                 <>
                                   <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Classe:</span>
+                                    <span className="text-muted-foreground">
+                                      Classe:
+                                    </span>
                                     <span className="font-medium">
-                                      {getStringField(student, ["classe", "classe_nom"]) || "N/A"}
+                                      {getStringField(student, [
+                                        "classe",
+                                        "classe_nom",
+                                      ]) || "N/A"}
                                     </span>
                                   </div>
                                   <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Email:</span>
+                                    <span className="text-muted-foreground">
+                                      Email:
+                                    </span>
                                     <span className="font-medium">
-                                      {getStringField(student, ["email"]) || "N/A"}
+                                      {getStringField(student, ["email"]) ||
+                                        "N/A"}
                                     </span>
                                   </div>
                                 </>
@@ -2308,7 +2419,9 @@ export default function Payments() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Enregistré par:</span>
+                          <span className="text-muted-foreground">
+                            Enregistré par:
+                          </span>
                           <span className="font-medium">
                             {getStringField(selectedPayment, [
                               "enregistre_par",
@@ -2317,7 +2430,9 @@ export default function Payments() {
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Qui a payé:</span>
+                          <span className="text-muted-foreground">
+                            Qui a payé:
+                          </span>
                           <span className="font-medium">
                             {getStringField(selectedPayment, [
                               "qui_a_paye",
@@ -2328,7 +2443,9 @@ export default function Payments() {
                       </div>
                       <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Date de création:</span>
+                          <span className="text-muted-foreground">
+                            Date de création:
+                          </span>
                           <span className="font-medium">
                             {getDateField(selectedPayment, [
                               "createdAt",
@@ -2338,7 +2455,9 @@ export default function Payments() {
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Dernière modification:</span>
+                          <span className="text-muted-foreground">
+                            Dernière modification:
+                          </span>
                           <span className="font-medium">
                             {getDateField(selectedPayment, [
                               "updatedAt",
@@ -2354,30 +2473,47 @@ export default function Payments() {
                   {(() => {
                     const factureIds = selectedPayment.facture_ids || [];
                     const relatedInvoices = factureIds
-                      .map(id => invoiceById[id])
+                      .map((id) => invoiceById[id])
                       .filter(Boolean);
-                    
+
                     if (relatedInvoices.length > 0) {
                       return (
                         <div className="space-y-2">
-                          <h3 className="font-semibold text-lg">Factures Liées</h3>
+                          <h3 className="font-semibold text-lg">
+                            Factures Liées
+                          </h3>
                           <div className="space-y-2">
                             {relatedInvoices.map((invoice) => (
-                              <div key={invoice.id} className="p-3 border rounded-lg bg-muted/50">
+                              <div
+                                key={invoice.id}
+                                className="p-3 border rounded-lg bg-muted/50"
+                              >
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
                                   <div>
-                                    <span className="text-muted-foreground">Numéro:</span>
-                                    <span className="ml-2 font-medium">{invoice.numero || "N/A"}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-muted-foreground">Montant:</span>
+                                    <span className="text-muted-foreground">
+                                      Numéro:
+                                    </span>
                                     <span className="ml-2 font-medium">
-                                      {currencyFormatter.format(Number(invoice.montant_total) || 0)}
+                                      {invoice.numero || "N/A"}
                                     </span>
                                   </div>
                                   <div>
-                                    <span className="text-muted-foreground">Statut:</span>
-                                    <span className="ml-2 font-medium">{invoice.statut || "N/A"}</span>
+                                    <span className="text-muted-foreground">
+                                      Montant:
+                                    </span>
+                                    <span className="ml-2 font-medium">
+                                      {currencyFormatter.format(
+                                        Number(invoice.montant_total) || 0,
+                                      )}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">
+                                      Statut:
+                                    </span>
+                                    <span className="ml-2 font-medium">
+                                      {invoice.statut || "N/A"}
+                                    </span>
                                   </div>
                                 </div>
                               </div>
@@ -2392,29 +2528,43 @@ export default function Payments() {
                   {/* Détails supplémentaires */}
                   {(() => {
                     const details = selectedPayment.details;
-                    const description = getStringField(selectedPayment, ["description"]);
+                    const description = getStringField(selectedPayment, [
+                      "description",
+                    ]);
                     const notes = getStringField(selectedPayment, ["notes"]);
-                    
+
                     if (details || description || notes) {
                       return (
                         <div className="space-y-2">
-                          <h3 className="font-semibold text-lg">Détails Supplémentaires</h3>
+                          <h3 className="font-semibold text-lg">
+                            Détails Supplémentaires
+                          </h3>
                           <div className="space-y-2 text-sm">
                             {description && (
                               <div>
-                                <span className="text-muted-foreground">Description:</span>
-                                <p className="mt-1 p-2 bg-muted/50 rounded">{description}</p>
+                                <span className="text-muted-foreground">
+                                  Description:
+                                </span>
+                                <p className="mt-1 p-2 bg-muted/50 rounded">
+                                  {description}
+                                </p>
                               </div>
                             )}
                             {notes && (
                               <div>
-                                <span className="text-muted-foreground">Notes:</span>
-                                <p className="mt-1 p-2 bg-muted/50 rounded">{notes}</p>
+                                <span className="text-muted-foreground">
+                                  Notes:
+                                </span>
+                                <p className="mt-1 p-2 bg-muted/50 rounded">
+                                  {notes}
+                                </p>
                               </div>
                             )}
                             {details && typeof details === "object" && (
                               <div>
-                                <span className="text-muted-foreground">Détails techniques:</span>
+                                <span className="text-muted-foreground">
+                                  Détails techniques:
+                                </span>
                                 <pre className="mt-1 p-2 bg-muted/50 rounded text-xs overflow-x-auto">
                                   {JSON.stringify(details, null, 2)}
                                 </pre>
@@ -2430,15 +2580,18 @@ export default function Payments() {
               )}
 
               <DialogFooter className="flex justify-between">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={handlePrintPaymentDetails}
                   className="flex items-center gap-2"
                 >
                   <Printer className="h-4 w-4" />
                   Imprimer
                 </Button>
-                <Button variant="outline" onClick={() => setIsPaymentDetailOpen(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsPaymentDetailOpen(false)}
+                >
                   Fermer
                 </Button>
               </DialogFooter>

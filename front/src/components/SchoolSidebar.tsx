@@ -67,9 +67,7 @@ const menuItems = [
   },
   {
     title: "sidebar.administration",
-    items: [
-      { title: "sidebar.users", url: "/users", icon: UserCheck },
-    ],
+    items: [{ title: "sidebar.users", url: "/users", icon: UserCheck }],
   },
   {
     title: "sidebar.portal",
@@ -92,48 +90,61 @@ export function SchoolSidebar() {
     if (itemUrl === currentPath) {
       return true;
     }
-    
+
     // Correspondance pour les routes avec paramètres (ex: /students/123)
-    if (currentPath.startsWith(itemUrl + '/')) {
+    if (currentPath.startsWith(itemUrl + "/")) {
       return true;
     }
-    
+
     // Cas spéciaux pour certaines routes
-    if (itemUrl === '/portal' && (currentPath === '/portal' || currentPath.startsWith('/portal/'))) {
+    if (
+      itemUrl === "/portal" &&
+      (currentPath === "/portal" || currentPath.startsWith("/portal/"))
+    ) {
       return true;
     }
-    
-    if (itemUrl === '/profile' && currentPath === '/profile') {
+
+    if (itemUrl === "/profile" && currentPath === "/profile") {
       return true;
     }
-    
-    if (itemUrl === '/dashboard' && currentPath === '/dashboard') {
+
+    if (itemUrl === "/dashboard" && currentPath === "/dashboard") {
       return true;
     }
-    
+
     // Cas spéciaux pour les étudiants
-    if (itemUrl === '/students' && (currentPath.startsWith('/students') || currentPath.startsWith('/student'))) {
+    if (
+      itemUrl === "/students" &&
+      (currentPath.startsWith("/students") ||
+        currentPath.startsWith("/student"))
+    ) {
       return true;
     }
-    
+
     // Cas spéciaux pour les paiements - plus précis
-    if (itemUrl === '/payments' && currentPath.startsWith('/payments')) {
+    if (itemUrl === "/payments" && currentPath.startsWith("/payments")) {
       return true;
     }
-    
+
     // Cas spéciaux pour le tableau de bord des paiements
-    if (itemUrl === '/payment-management' && currentPath.startsWith('/payment-management')) {
+    if (
+      itemUrl === "/payment-management" &&
+      currentPath.startsWith("/payment-management")
+    ) {
       return true;
     }
-    
+
     // Cas spéciaux pour les plans de paiement
-    if (itemUrl === '/payment-plans' && currentPath.startsWith('/payment-plans')) {
+    if (
+      itemUrl === "/payment-plans" &&
+      currentPath.startsWith("/payment-plans")
+    ) {
       return true;
     }
-    
+
     return false;
   };
-  
+
   // Vérification de sécurité pour éviter l'erreur useAuth
   let authContext;
   try {
@@ -142,7 +153,7 @@ export function SchoolSidebar() {
     console.error("AuthContext not available:", error);
     return null; // Retourner null si le contexte n'est pas disponible
   }
-  
+
   const {
     user,
     isAdmin,
@@ -159,23 +170,27 @@ export function SchoolSidebar() {
   if (!user) {
     filteredMenuItems = [];
   } else if (isAdmin) {
-    // Admin a accès à tout, y compris le portail
-    filteredMenuItems = menuItems;
+    // Admin a accès à tout sauf le portail étudiant (demandé par l'utilisateur)
+    filteredMenuItems = menuItems.filter(
+      (section) => section.title !== "sidebar.portal",
+    );
   } else if (isSubAdmin) {
-    // Sous-admin a accès à tout comme l'admin, sauf la gestion des sous-admin
-    filteredMenuItems = menuItems;
+    // Sous-admin a accès à tout sauf le portail étudiant (demandé par l'utilisateur)
+    filteredMenuItems = menuItems.filter(
+      (section) => section.title !== "sidebar.portal",
+    );
   } else if (isComptable) {
     const comptableAllowedTitles = new Set([
       "sidebar.principal",
       "sidebar.gestion_financiere",
-      "sidebar.portal",
+      // "sidebar.portal", // Masqué pour les comptables
     ]);
     const comptableAllowedItems = new Set([
       "sidebar.dashboard",
       "sidebar.tariffs",
       "sidebar.payment_dashboard",
       "sidebar.payments",
-      "sidebar.portal",
+      // "sidebar.portal",
       "sidebar.profile",
     ]);
 
@@ -185,21 +200,18 @@ export function SchoolSidebar() {
         return {
           ...section,
           items: section.items.filter((item) =>
-            comptableAllowedItems.has(item.title)
+            comptableAllowedItems.has(item.title),
           ),
         };
       })
       .filter((section) => section.items.length > 0);
   } else if (isEtudiant) {
-    const etudiantAllowedItems = new Set([
-      "sidebar.portal",
-      "sidebar.profile",
-    ]);
+    const etudiantAllowedItems = new Set(["sidebar.portal", "sidebar.profile"]);
 
     filteredMenuItems = menuItems
       .map((section) => {
         const filteredSectionItems = section.items.filter((item) =>
-          etudiantAllowedItems.has(item.title)
+          etudiantAllowedItems.has(item.title),
         );
         return {
           ...section,
@@ -208,15 +220,12 @@ export function SchoolSidebar() {
       })
       .filter((section) => section.items.length > 0);
   } else if (isParent) {
-    const parentAllowedItems = new Set([
-      "sidebar.portal",
-      "sidebar.profile",
-    ]);
+    const parentAllowedItems = new Set(["sidebar.portal", "sidebar.profile"]);
 
     filteredMenuItems = menuItems
       .map((section) => {
         const filteredSectionItems = section.items.filter((item) =>
-          parentAllowedItems.has(item.title)
+          parentAllowedItems.has(item.title),
         );
         return {
           ...section,
@@ -233,7 +242,7 @@ export function SchoolSidebar() {
     filteredMenuItems = menuItems
       .map((section) => {
         const filteredSectionItems = section.items.filter((item) =>
-          enseignantAllowedItems.has(item.title)
+          enseignantAllowedItems.has(item.title),
         );
         return {
           ...section,
@@ -251,7 +260,7 @@ export function SchoolSidebar() {
     filteredMenuItems = menuItems
       .map((section) => {
         const filteredSectionItems = section.items.filter((item) =>
-          fallbackAllowedItems.has(item.title)
+          fallbackAllowedItems.has(item.title),
         );
         return {
           ...section,
@@ -285,15 +294,18 @@ export function SchoolSidebar() {
         {/* Filter out "Factures" for comptable */}
         {filteredMenuItems.map((section) => (
           <SidebarGroup key={section.title}>
-            {!collapsed && (
+            {/* {!collapsed && (
               <SidebarGroupLabel className="text-sidebar-foreground/70">
                 {t(section.title)}
               </SidebarGroupLabel>
-            )}
+            )} */}
             <SidebarGroupContent>
               <SidebarMenu>
                 {section.items.map((item) => {
-                  const isActive = isMenuItemActive(item.url, location.pathname);
+                  const isActive = isMenuItemActive(
+                    item.url,
+                    location.pathname,
+                  );
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild>
@@ -322,35 +334,54 @@ export function SchoolSidebar() {
         {/* User Profile at the bottom of the sidebar */}
         {user && (
           <div className="mt-auto border-t border-sidebar-border">
-            <div className="p-4 flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold">
-                {user.prenom ? user.prenom.charAt(0).toUpperCase() : ''}
-              </div>
-              {!collapsed && (
-                <div className="flex flex-col">
-                  <span className="font-medium text-sidebar-foreground whitespace-nowrap">
-                    {user.prenom} {user.nom}
-                  </span>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : ''}
-                  </span>
+            <div
+              className={`p-4 flex items-center gap-3 ${collapsed ? "justify-center" : "justify-between"}`}
+            >
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className="h-8 w-8 rounded-full bg-primary flex-shrink-0 flex items-center justify-center text-primary-foreground font-semibold">
+                  {user.prenom ? user.prenom.charAt(0).toUpperCase() : ""}
                 </div>
+                {!collapsed && (
+                  <div className="flex flex-col overflow-hidden">
+                    <span className="font-medium text-sidebar-foreground truncate">
+                      {user.prenom} {user.nom}
+                    </span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {user.role
+                        ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+                        : ""}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {!collapsed && (
+                <button
+                  onClick={() => {
+                    logout();
+                    window.location.href = "/login";
+                  }}
+                  title="Déconnexion"
+                  className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors flex-shrink-0"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
               )}
             </div>
-            <div className="px-4 pb-4">
-              <button 
-                onClick={() => {
-                  logout();
-                  window.location.href = "/login";
-                }}
-                className="flex items-center gap-3 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors w-full text-left"
-              >
-                <LogOut className="h-4 w-4" />
-                {!collapsed && (
-                  <span className="text-sm font-medium">Déconnexion</span>
-                )}
-              </button>
-            </div>
+
+            {collapsed && (
+              <div className="px-4 pb-4 flex justify-center">
+                <button
+                  onClick={() => {
+                    logout();
+                    window.location.href = "/login";
+                  }}
+                  className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </SidebarContent>

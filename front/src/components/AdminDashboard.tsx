@@ -40,7 +40,7 @@ const AdminDashboard = () => {
       </div>
     );
   }
-  
+
   const { user, isAdmin, isSubAdmin, canManageUsers } = authContext;
   const [activeTab, setActiveTab] = useState("users");
 
@@ -58,7 +58,7 @@ const AdminDashboard = () => {
     enseignants: users.filter((u) => u.role === "enseignant").length,
     parents: users.filter((u) => u.role === "parent").length,
     etudiants: users.filter(
-      (u) => u.role === "etudiant" || u.role === "student"
+      (u) => u.role === "etudiant" || u.role === "student",
     ).length,
     actifs: users.filter((u) => u.isActive).length,
   };
@@ -87,11 +87,13 @@ const AdminDashboard = () => {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Panneau d'Administration</h1>
-          <div className="flex items-center gap-2 mt-2">
-            <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold">
+            Panneau d'Administration
+          </h1>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <p className="text-sm md:text-base text-muted-foreground">
               Bienvenue, {user?.prenom} {user?.nom}
             </p>
             {getRoleBadge()}
@@ -164,34 +166,42 @@ const AdminDashboard = () => {
 
       {/* Main Content with Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="users" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Gestion Utilisateurs
-          </TabsTrigger>
-          {isAdmin && (
+        <div className="w-full overflow-x-auto pb-2 scrollbar-hide">
+          <TabsList className="inline-flex w-auto min-w-full lg:grid lg:grid-cols-4 h-auto p-1 bg-muted">
             <TabsTrigger
-              value="create-admin"
-              className="flex items-center gap-2"
+              value="users"
+              className="flex items-center gap-2 px-4 py-2"
             >
-              <UserPlus className="h-4 w-4" />
-              Créer Sous-Admin
+              <Users className="h-4 w-4" />
+              <span className="whitespace-nowrap">Gestion Utilisateurs</span>
             </TabsTrigger>
-          )}
-          {canManageUsers && (
+            {isAdmin && (
+              <TabsTrigger
+                value="create-admin"
+                className="flex items-center gap-2 px-4 py-2"
+              >
+                <UserPlus className="h-4 w-4" />
+                <span className="whitespace-nowrap">Créer Sous-Admin</span>
+              </TabsTrigger>
+            )}
+            {canManageUsers && (
+              <TabsTrigger
+                value="create-parent"
+                className="flex items-center gap-2 px-4 py-2"
+              >
+                <User className="h-4 w-4" />
+                <span className="whitespace-nowrap">Créer Parent</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger
-              value="create-parent"
-              className="flex items-center gap-2"
+              value="debug"
+              className="flex items-center gap-2 px-4 py-2"
             >
-              <User className="h-4 w-4" />
-              Créer Parent
+              <Bug className="h-4 w-4" />
+              <span className="whitespace-nowrap">Debug</span>
             </TabsTrigger>
-          )}
-          <TabsTrigger value="debug" className="flex items-center gap-2">
-            <Bug className="h-4 w-4" />
-            Debug
-          </TabsTrigger>
-        </TabsList>
+          </TabsList>
+        </div>
 
         <TabsContent value="users" className="space-y-4">
           <UserManagement />

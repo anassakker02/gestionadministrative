@@ -62,6 +62,7 @@ async function seedFirestore() {
     const academicYear = `${currentYear}-${currentYear + 1}`;
 
     // Nettoyage collections principales - Version ultra simplifiée
+    console.log("⏳ Nettoyage des collections...");
     const collections = [
       "users",
       "etudiants",
@@ -71,17 +72,32 @@ async function seedFirestore() {
       "paiements",
     ];
     for (const col of collections) {
+      console.log(`   - Nettoyage de la collection: ${col}...`);
       const snapshot = await db.collection(col).get();
-      const batch = db.batch();
-      snapshot.forEach((doc) => batch.delete(doc.ref));
-      await batch.commit();
-      console.log(`✅ Collection ${col} vidée`);
+      if (snapshot.empty) {
+        console.log(`     ✅ Déjà vide`);
+        continue;
+      }
+      
+      const chunks = [];
+      const size = 400; // Conservatively below 500 limit
+      for (let i = 0; i < snapshot.docs.length; i += size) {
+        chunks.push(snapshot.docs.slice(i, i + size));
+      }
+
+      for (const chunk of chunks) {
+        const batch = db.batch();
+        chunk.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+      }
+      console.log(`     ✅ Vidée (${snapshot.docs.length} docs)`);
     }
 
     // === VERSION ULTRA SIMPLIFIÉE ===
     // Seulement admin et étudiants, aucune autre table
 
     // === USERS === (ids stables) - Version simplifiée
+    console.log("⏳ Insérant les utilisateurs...");
     const users = [
       {
         id: "admin_user",
@@ -161,6 +177,7 @@ async function seedFirestore() {
     console.log("✅ Utilisateurs insérés");
 
     // === BOURSES === (3 bourses)
+    console.log("⏳ Insérant les bourses...");
     const bourses = [
       {
         id: "bourse_excellence",
@@ -209,6 +226,7 @@ async function seedFirestore() {
     console.log("✅ Bourses insérées");
 
     // === CLASSES === (5 classes de différents niveaux)
+    console.log("⏳ Insérant les classes...");
     const classes = [
       {
         id: "classe_6eme",

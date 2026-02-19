@@ -1,8 +1,14 @@
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { motion } from "framer-motion"
-import { Plus, BookOpen, Users, Clock } from "lucide-react"
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { motion } from "framer-motion";
+import { Plus, BookOpen, Users, Clock } from "lucide-react";
 
 const mockSubjects = [
   {
@@ -13,17 +19,17 @@ const mockSubjects = [
     teachers: 3,
     classes: 8,
     hoursPerWeek: 4,
-    color: "bg-blue-500"
+    color: "bg-blue-500",
   },
   {
     id: 2,
     name: "Histoire-Géographie",
     code: "HIST",
-    level: "Collège/Lycée", 
+    level: "Collège/Lycée",
     teachers: 2,
     classes: 6,
     hoursPerWeek: 3,
-    color: "bg-green-500"
+    color: "bg-green-500",
   },
   {
     id: 3,
@@ -33,7 +39,7 @@ const mockSubjects = [
     teachers: 4,
     classes: 10,
     hoursPerWeek: 3,
-    color: "bg-purple-500"
+    color: "bg-purple-500",
   },
   {
     id: 4,
@@ -43,7 +49,7 @@ const mockSubjects = [
     teachers: 2,
     classes: 4,
     hoursPerWeek: 3,
-    color: "bg-orange-500"
+    color: "bg-orange-500",
   },
   {
     id: 5,
@@ -53,7 +59,7 @@ const mockSubjects = [
     teachers: 3,
     classes: 8,
     hoursPerWeek: 4,
-    color: "bg-red-500"
+    color: "bg-red-500",
   },
   {
     id: 6,
@@ -63,9 +69,9 @@ const mockSubjects = [
     teachers: 2,
     classes: 12,
     hoursPerWeek: 2,
-    color: "bg-yellow-500"
-  }
-]
+    color: "bg-yellow-500",
+  },
+];
 
 export default function Subjects() {
   return (
@@ -74,15 +80,17 @@ export default function Subjects() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex justify-between items-center"
+        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
       >
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Gestion des Matières</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">
+            Gestion des Matières
+          </h1>
+          <p className="text-sm md:text-base text-muted-foreground">
             Organisez le programme pédagogique de votre établissement
           </p>
         </div>
-        <Button className="bg-gradient-primary hover:opacity-90 shadow-glow">
+        <Button className="bg-gradient-primary hover:opacity-90 shadow-glow w-full sm:w-auto h-11 sm:h-10">
           <Plus className="mr-2 h-4 w-4" />
           Ajouter une matière
         </Button>
@@ -136,16 +144,18 @@ export default function Subjects() {
                     <div className="flex items-center justify-center mb-1">
                       <Clock className="h-4 w-4 text-primary" />
                     </div>
-                    <p className="text-sm font-medium">{subject.hoursPerWeek}h</p>
+                    <p className="text-sm font-medium">
+                      {subject.hoursPerWeek}h
+                    </p>
                     <p className="text-xs text-muted-foreground">Par semaine</p>
                   </div>
                 </div>
-                <div className="pt-2 border-t">
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="flex-1">
-                      Voir planning
+                <div className="pt-4 border-t">
+                  <div className="flex flex-col xs:flex-row gap-2">
+                    <Button size="sm" variant="outline" className="flex-1 h-9">
+                      Planning
                     </Button>
-                    <Button size="sm" variant="outline" className="flex-1">
+                    <Button size="sm" variant="outline" className="flex-1 h-9">
                       Modifier
                     </Button>
                   </div>
@@ -156,5 +166,5 @@ export default function Subjects() {
         ))}
       </motion.div>
     </div>
-  )
+  );
 }

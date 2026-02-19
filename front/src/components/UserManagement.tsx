@@ -32,7 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import { userService } from "@/services/userService";
 import { User } from "@/types/user";
 import { useAuth } from "@/contexts/AuthContext";
-import { Search, Users, UserCheck, UserX } from "lucide-react";
+import { Search, Users, UserCheck, UserX, Edit, Eye } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 // Types de rôles disponibles dans le système
@@ -232,7 +232,7 @@ const UserManagement = () => {
     (u: User) =>
       u.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase())
+      u.email.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   // Check if current user can manage the target user
@@ -327,15 +327,13 @@ const UserManagement = () => {
     if (!selectedUser) return null;
 
     return (
-      <Dialog
-        open={isEditModalOpen}
-        onOpenChange={handleClose}
-      >
+      <Dialog open={isEditModalOpen} onOpenChange={handleClose}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Modifier l'utilisateur</DialogTitle>
             <DialogDescription>
-              Modifiez les informations de l'utilisateur et affectez un rôle si nécessaire.
+              Modifiez les informations de l'utilisateur et affectez un rôle si
+              nécessaire.
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -440,7 +438,7 @@ const UserManagement = () => {
   }) => {
     // Gestion de la date de création
     const getCreatedDate = (
-      createdAt: { _seconds: number } | string | Date | null | undefined
+      createdAt: { _seconds: number } | string | Date | null | undefined,
     ) => {
       if (!createdAt) return null;
 
@@ -470,35 +468,37 @@ const UserManagement = () => {
           <div className="text-2xl">{getRoleIcon(user.role)}</div>
 
           {/* Informations utilisateur */}
-          <div className="flex-1">
-            <p className="font-medium">
+          <div className="flex-1 min-w-0">
+            <p className="font-medium truncate">
               {user.prenom} {user.nom}
             </p>
-            <p className="text-sm text-muted-foreground">{user.email}</p>
+            <p className="text-sm text-muted-foreground truncate hidden lg:block">
+              {user.email}
+            </p>
             {user.telephone && (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground hidden lg:block">
                 📞 {user.telephone}
               </p>
             )}
             {createdDate && (
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
                 Inscrit le: {createdDate.toLocaleDateString("fr-FR")}
               </p>
             )}
           </div>
 
           {/* Affichage du rôle actuel */}
-          <div className="min-w-[150px] text-center">
+          <div className="hidden md:block w-32 text-center">
             <Badge
               variant={getRoleBadgeVariant(user.role)}
-              className="text-sm px-3 py-1"
+              className="text-xs px-2 py-0.5"
             >
               {getRoleLabel(user.role)}
             </Badge>
           </div>
 
           {/* Statut avec toggle */}
-          <div className="min-w-[120px] text-center flex flex-col items-center gap-2">
+          <div className="hidden sm:flex w-24 text-center flex-col items-center gap-1">
             <Switch
               checked={!!user.isActive}
               onCheckedChange={(checked) =>
@@ -508,30 +508,37 @@ const UserManagement = () => {
                 !canUserBeManaged(user) ||
                 isMutationLoading(updateStatusMutation)
               }
+              className="scale-75 sm:scale-100"
             />
-            <span className="text-xs">
+            <span className="text-[10px] hidden md:block">
               {user.isActive ? "Actif" : "Non actif"}
             </span>
           </div>
 
           {/* Boutons d'action */}
-          <div className="flex gap-2 min-w-[140px]">
+          <div className="flex gap-2 w-24 sm:w-32 md:w-40 justify-end">
             <Button
               variant="outline"
               size="sm"
               type="button"
               onClick={() => handleEditUser(user)}
               disabled={!canUserBeManaged(user)}
+              className="h-8 w-8 sm:h-9 sm:w-auto px-0 sm:px-3"
+              title="Modifier"
             >
-              Modifier
+              <span className="hidden sm:inline">Modifier</span>
+              <Edit className="h-4 w-4 sm:hidden" />
             </Button>
             <Button
               variant="outline"
               size="sm"
               type="button"
               onClick={() => handleUserDetails(user)}
+              className="h-8 w-8 sm:h-9 sm:w-auto px-0 sm:px-3"
+              title="Détails"
             >
-              Détails
+              <span className="hidden sm:inline">Détails</span>
+              <Eye className="h-4 w-4 sm:hidden" />
             </Button>
           </div>
         </div>
@@ -552,7 +559,7 @@ const UserManagement = () => {
       </CardHeader>
       <CardContent>
         {/* Barre de recherche */}
-        <div className="flex gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="flex-1">
             <Label htmlFor="search">Rechercher un utilisateur</Label>
             <div className="relative">
@@ -566,10 +573,10 @@ const UserManagement = () => {
               />
             </div>
           </div>
-          <div>
+          <div className="sm:w-48">
             <Label htmlFor="filter">Filtrer par rôle</Label>
             <Select value={filterRole} onValueChange={setFilterRole}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -586,16 +593,18 @@ const UserManagement = () => {
 
         {/* En-têtes des colonnes */}
         <div className="flex items-center gap-4 px-4 py-2 border-b bg-muted/50 rounded-t-lg mb-4">
-          <div className="text-2xl opacity-0">👤</div>
+          <div className="w-8 opacity-0">👤</div>
           <div className="flex-1 font-medium text-sm">Nom</div>
-          <div className="flex-1 font-medium text-sm">Email</div>
-          <div className="min-w-[150px] text-center font-medium text-sm">
+          <div className="hidden lg:block flex-1 font-medium text-sm">
+            Email
+          </div>
+          <div className="hidden md:block w-32 text-center font-medium text-sm">
             Rôle
           </div>
-          <div className="min-w-[100px] text-center font-medium text-sm">
+          <div className="hidden sm:block w-24 text-center font-medium text-sm">
             Statut
           </div>
-          <div className="min-w-[140px] text-center font-medium text-sm">
+          <div className="w-24 sm:w-32 md:w-40 text-center font-medium text-sm">
             Actions
           </div>
         </div>

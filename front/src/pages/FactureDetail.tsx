@@ -36,21 +36,62 @@ export default function FactureDetail() {
     );
 
   return (
-    <div className="p-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Facture {facture.numero || facture.id}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4">
-            <div>Montant total: {facture.montant_total} MAD</div>
-            <div>Montant payé: {facture.montantPaye || 0} MAD</div>
-            <div>Montant restant: {facture.montantRestant || 0} MAD</div>
+    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
+      <Card className="shadow-lg border-primary/10">
+        <CardHeader className="bg-muted/30 pb-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <CardTitle className="text-xl md:text-2xl font-bold">
+                Facture {facture.numero || facture.id}
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Détails de la facturation et état des paiements
+              </p>
+            </div>
+            <div className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full uppercase tracking-wider">
+              {facture.statut || "En cours"}
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => window.print()}>Imprimer</Button>
+        </CardHeader>
+        <CardContent className="pt-8 space-y-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="p-4 rounded-lg bg-muted/20 border border-border/50 text-center">
+              <span className="text-xs text-muted-foreground uppercase font-semibold">
+                Montant total
+              </span>
+              <div className="text-xl font-bold mt-1">
+                {facture.montant_total} MAD
+              </div>
+            </div>
+            <div className="p-4 rounded-lg bg-green-50/50 border border-green-100 text-center">
+              <span className="text-xs text-green-600 uppercase font-semibold">
+                Montant payé
+              </span>
+              <div className="text-xl font-bold mt-1 text-green-700">
+                {facture.montantPaye || 0} MAD
+              </div>
+            </div>
+            <div className="p-4 rounded-lg bg-orange-50/50 border border-orange-100 text-center">
+              <span className="text-xs text-orange-600 uppercase font-semibold">
+                Montant restant
+              </span>
+              <div className="text-xl font-bold mt-1 text-orange-700">
+                {facture.montantRestant || 0} MAD
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
+            <Button
+              onClick={() => window.print()}
+              className="flex-1 sm:flex-none shadow-sm"
+              variant="default"
+            >
+              Imprimer la facture
+            </Button>
             <Button
               variant="outline"
+              className="flex-1 sm:flex-none"
               onClick={async () => {
                 // Tente d'obtenir une URL via l'API, gère data: URL -> Blob
                 try {
@@ -84,7 +125,7 @@ export default function FactureDetail() {
                 }
               }}
             >
-              Télécharger PDF
+              Télécharger en PDF
             </Button>
           </div>
         </CardContent>

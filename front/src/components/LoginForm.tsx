@@ -25,17 +25,17 @@ export function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
+
     try {
       const success = await login({ email, password });
       if (success) {
         // Récupérer les données utilisateur pour déterminer la redirection
-        const storedUser = localStorage.getItem("user");
+        const storedUser = sessionStorage.getItem("user");
         if (storedUser) {
           const userData = JSON.parse(storedUser);
-          
+
           // Rediriger les étudiants et parents vers le portail
-          if (userData.role === 'etudiant' || userData.role === 'parent') {
+          if (userData.role === "etudiant" || userData.role === "parent") {
             navigate("/portal");
           } else {
             // Les autres rôles (admin, comptable, etc.) vont au dashboard
