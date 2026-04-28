@@ -15,19 +15,16 @@ export interface Classe {
 
 export const getClasses = async () => {
   try {
-    const response = await apiRequest("/classes", "GET");
-    console.log("Classes API Raw Response:", response); // Raw response
+    const response = await apiRequest("/classes", "GET"); // Raw response
     // Assuming the actual array data is nested under a 'data' property
     if (response && response.data) {
       return response.data;
     } else if (Array.isArray(response)) {
       return response; // If the data is already an array at the root
     } else {
-      console.error("Unexpected API response structure for classes:", response);
       return []; // Return an empty array to prevent .map errors
     }
   } catch (error) {
-    console.error("Error fetching classes:", error);
     throw error; // Re-throw the error for react-query to handle
   }
 };

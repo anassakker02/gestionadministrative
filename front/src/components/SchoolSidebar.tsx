@@ -26,6 +26,7 @@ import {
   PieChart,
   User,
   FileText,
+  ShieldAlert,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -67,7 +68,10 @@ const menuItems = [
   },
   {
     title: "sidebar.administration",
-    items: [{ title: "sidebar.users", url: "/users", icon: UserCheck }],
+    items: [
+      { title: "sidebar.users", url: "/users", icon: UserCheck },
+      { title: "sidebar.monitoring", url: "/monitoring", icon: ShieldAlert },
+    ],
   },
   {
     title: "sidebar.portal",

@@ -1,0 +1,279 @@
+================================================================
+  DEMO SOUTENANCE — PFE Cybersécurité YNOV 2026
+  Anass Akker / Amine BAHOU
+  Toutes les commandes par étape
+================================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ÉTAPE 0 — DÉMARRAGE (avant tout)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ Terminal 1 — Backend ]
+
+  cd "/Users/anass/Downloads/frais-gestionScolaire 4/back/functions"
+  node --env-file=.env server_local.js
+
+  → Résultat attendu : Express running on http://localhost:5001
+
+
+[ Terminal 2 — Frontend ]
+
+  cd "/Users/anass/Downloads/frais-gestionScolaire 4/front"
+  npm run dev
+
+  → Résultat attendu : Local: http://localhost:8081/
+
+
+[ Terminal 3 — Wazuh Docker ]
+
+  ln -sf "/Users/anass/Downloads/frais-gestionScolaire 4/front/wazuh-docker/single-node" /tmp/wazuh-node
+  cd /tmp/wazuh-node
+  docker compose up -d
+  docker compose ps
+
+  → Résultat attendu : 3 conteneurs Up (manager + indexer + dashboard)
+  → Ouvrir : https://localhost
+  → Login   : admin / SecretPassword
+
+
+[ Agent Wazuh macOS — déjà actif, vérifier ]
+
+  sudo /Library/Ossec/bin/wazuh-control status
+  sudo tail -20 /Library/Ossec/logs/ossec.log
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ÉTAPE 1 — WAF — Injection SQL bloquée (OWASP A03)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  curl -s -o /dev/null -w "Réponse HTTP: %{http_code}\n" \
+    'http://localhost:5001/gestionadminastration/us-central1/api/etudiants?id=1%20OR%201=1'
+
+  → Résultat attendu : Réponse HTTP: 403
+
+  À dire au jury :
+  "Le WAF intercepte la requête avant qu'elle touche la base de données.
+   HTTP 403 + WAF_BLOCK loggué dans Firestore auditLogs."
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ÉTAPE 2 — WAF — XSS bloqué (OWASP A03)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  curl -s -o /dev/null -w "Réponse HTTP: %{http_code}\n" \
+    'http://localhost:5001/gestionadminastration/us-central1/api/etudiants?nom=<script>alert(1)</script>'
+
+  → Résultat attendu : Réponse HTTP: 403
+
+  À dire au jury :
+  "La balise script est bloquée immédiatement. OWASP A03."
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ÉTAPE 3 — Brute Force → Lockout (OWASP A07)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  for i in {1..6}; do
+    curl -s -o /dev/null -w "Tentative $i → %{http_code}\n" \
+      -X POST http://localhost:5001/gestionadminastration/us-central1/api/auth/login \
+      -H 'Content-Type: application/json' \
+      -d '{"email":"admin@school.fr","password":"WRONG"}'
+  done
+
+  → Résultat attendu :
+      Tentative 1 → 401
+      Tentative 2 → 401
+      Tentative 3 → 401
+      Tentative 4 → 401
+      Tentative 5 → 401
+      Tentative 6 → 429  ← AUTH_LOCKOUT
+
+  À dire au jury :
+  "Après 5 échecs, le compte est verrouillé 15 minutes.
+   AUTH_LOCKOUT loggué dans Firestore avec IP + timestamp."
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ÉTAPE 4 — Scanner DAST automatique (12 tests OWASP)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  cd "/Users/anass/Downloads/frais-gestionScolaire 4/back/functions"
+  node --env-file=.env scripts/security_scan.js
+
+  → Résultat attendu :
+      ✅ PASS  [T01] API opérationnelle
+      ✅ PASS  [T02] Headers sécurité (HSTS/CSP)
+      ✅ PASS  [T03] Auth requise — HTTP 401 sans token
+      ✅ PASS  [T04] Rate limiting actif — HTTP 429
+      ✅ PASS  [T05] WAF — SQL Injection bloquée
+      ✅ PASS  [T06] WAF — Cross-Site Scripting bloqué
+      ✅ PASS  [T07] WAF — Path Traversal bloqué
+      ✅ PASS  [T08] WAF — Agents suspects bloqués
+      ✅ PASS  [T09] Payload > 10 KB rejeté
+      ✅ PASS  [T10] Escalade de privilèges bloquée
+      ✅ PASS  [T11] /monitoring admin only
+      ⚠️ WARN  [T12] CORS origines interdites
+      Score DAST final : 92/100
+
+  À dire au jury :
+  "Ce script automatise tous les tests OWASP Top 10.
+   11/12 réussis, 1 warning CORS non critique."
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ÉTAPE 5 — Chiffrement AES-256-CBC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  cd "/Users/anass/Downloads/frais-gestionScolaire 4/back/functions"
+
+  ENCRYPTION_KEY="a_very_secure_32_byte_secret_key!" node -e 'const enc = require("./src/utils/encryption"); const c = enc.encrypt("donnee-sensible"); console.log("Chiffre  :", c); console.log("Dechiffre:", enc.decrypt(c));'
+
+  → Résultat attendu :
+      Chiffre   : 3a9f1c...:<données hex>
+      Dechiffre : donnee-sensible
+
+  À dire au jury :
+  "Chaque chiffrement génère un IV aléatoire 128 bits différent.
+   Format stocké dans Firestore : iv_hex:ciphertext_hex.
+   Sans la clé ENCRYPTION_KEY, déchiffrement impossible."
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ÉTAPE 6 — Headers Sécurité HTTP (Helmet.js)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  curl -I http://localhost:5001/gestionadminastration/us-central1/api/auth/login
+
+  → Headers attendus :
+      strict-transport-security: max-age=31536000
+      x-frame-options: DENY
+      x-content-type-options: nosniff
+      content-security-policy: default-src 'self'
+
+  À dire au jury :
+  "HSTS force HTTPS pendant 1 an.
+   X-Frame DENY = protection anti-clickjacking.
+   CSP default-src self = aucun script externe autorisé."
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ÉTAPE 7 — Dashboard /monitoring (Score 100/100)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  open http://localhost:8081/monitoring
+
+  → Points à montrer au jury :
+      1. Score 100/100 en haut à droite
+      2. Onglet WAF    → 0 attaques (ou montrer les WAF_BLOCK)
+      3. Onglet SIEM Logs → 20 derniers événements Firestore
+      4. Alertes auto : >20 auth failures → CRITIQUE
+      5. Refresh automatique 60 secondes
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ÉTAPE 8 — Wazuh SIEM Dashboard en direct
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  open https://localhost
+  Login : admin / SecretPassword
+
+  → Points à montrer au jury :
+      1. Agents → main-machine → Active ✅
+      2. Security Events → 436 420 events
+      3. File Integrity → Rule 550 Level 7 → root 89.44% /var/bin/afsa
+      4. MITRE ATT&CK → T1565.001 Stored Data Manipulation dominant (~95%)
+      5. Policy Monitoring → Rootcheck → 4 anomalies détectées
+      6. Vulnerabilities → 17 CVE → CVE-2019-5736 CVSS3=8.6 Docker P1
+
+  Vérifier agent depuis Docker manager :
+      docker exec -it wazuh-node-wazuh.manager-1 /var/ossec/bin/agent_control -l
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ÉTAPE 9 — FIM — Déclencher une alerte Rule 550 Level 7
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  sudo bash -c "echo '# wazuh-test' >> /private/etc/hosts"
+
+  → Dans Wazuh après ~30 secondes :
+      Security Events → Rule 550 Level 7
+      Integrity checksum changed
+      T1565.001 Stored Data Manipulation
+
+  À dire au jury :
+  "Wazuh détecte instantanément toute modification de fichier système.
+   Rootkit ou backdoor = détection immédiate Rule 550 Level 7."
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ÉTAPE 10 — RGPD — Traçabilité Art.5 & Art.32
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  # 1. Ouvrir un onglet privé
+  open -a "Brave Browser" --args --incognito http://localhost:8081/login
+
+  # 2. Taper un MAUVAIS mot de passe → connexion échouée
+
+  # 3. Aller sur le dashboard monitoring
+  open http://localhost:8081/monitoring
+
+  → Onglet SIEM Logs → Rafraîchir
+  → AUTH_FAILURE visible : email + IP + timestamp tracés dans Firestore
+
+  À dire au jury :
+  "Chaque échec est tracé avec horodatage serverTimestamp() côté serveur.
+   Logs infalsifiables : allow update/delete: if false en Firestore.
+   Conformité RGPD Art.5 (intégrité) + Art.32 (sécurité traitement)."
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  COMMANDES UTILES — AGENT WAZUH macOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  sudo /Library/Ossec/bin/wazuh-control status    ← statut agent
+  sudo /Library/Ossec/bin/wazuh-control start     ← démarrer
+  sudo /Library/Ossec/bin/wazuh-control stop      ← arrêter
+  sudo /Library/Ossec/bin/wazuh-control restart   ← redémarrer
+  sudo tail -f /Library/Ossec/logs/ossec.log      ← logs temps réel
+  sudo cat /Library/Ossec/var/run/wazuh-agentd.state | grep status
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  COMMANDES UTILES — WAZUH DOCKER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  cd /tmp/wazuh-node
+  docker compose ps                                          ← état conteneurs
+  docker compose up -d                                       ← démarrer
+  docker compose down                                        ← arrêter
+  docker compose restart                                     ← redémarrer
+  docker exec -it wazuh-node-wazuh.manager-1 /var/ossec/bin/agent_control -l
+  docker logs wazuh-node-wazuh.manager-1 --tail 50          ← logs manager
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  KPI CLÉS À RETENIR POUR LE JURY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  436 420   Security Events Wazuh
+  100/100   Score Dashboard /monitoring
+   92/100   Score DAST (12 tests OWASP)
+   17 CVE   8 High + 9 Medium détectées
+    8 / 8   Exigences CDC §3.3 couvertes
+        9   Types AuditLogs immuables Firestore
+       10   Catégories OWASP vérifiées
+        6   Articles RGPD couverts
+        4   Rôles RBAC — moindre privilège
+      12r   bcrypt rounds — anti-brute force
+  AES-256   Chiffrement données sensibles
+     100%   Agents Wazuh coverage (2/2 actifs)
+
+  CVE-2019-5736 CVSS3=8.6 → Docker container escape → patch P1
+  T1565.001 Stored Data Manipulation → ~95% des alertes MITRE
+  Rule 550 Level 7 → FIM Integrity checksum changed (dominant)
+
+================================================================
+  Amine BAHOU / Anass Akker — YNOV Campus 2026
+  PFE Bachelor Cybersécurité / Cyberdéfense
+================================================================

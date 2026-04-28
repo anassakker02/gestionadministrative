@@ -631,7 +631,6 @@ export default function Payments() {
       setPaymentRelatedInvoice(res.data || null);
       return res.data || null;
     } catch (err) {
-      console.error("Failed to fetch related invoice", err);
       setPaymentRelatedInvoice(null);
       return null;
     } finally {
@@ -1260,7 +1259,6 @@ export default function Payments() {
           }
         }
       } catch (err) {
-        console.debug("No full paiement fallback or failed to fetch", err);
       }
     }
 
@@ -1335,17 +1333,12 @@ export default function Payments() {
         errRec.response as { data?: { message?: string } } | undefined
       )?.data?.message;
       if (status === 404) {
-        console.debug(`Payment actor ${resolvedUserId} not found (404)`);
         setPaymentActorError(srvMsg || "Utilisateur non trouvé");
       } else if (status === 403) {
-        console.warn(
-          `Not allowed to fetch user ${resolvedUserId} (403). Current account needs admin role.`,
-        );
         setPaymentActorError(
           srvMsg || "Accès refusé pour récupérer l'utilisateur",
         );
       } else {
-        console.error("Failed to fetch payment actor", err);
         setPaymentActorError(srvMsg || "Impossible de récupérer l'utilisateur");
       }
       setPaymentActor(null);
@@ -1501,7 +1494,6 @@ export default function Payments() {
                 "Les factures ont été générées à partir du paiement enregistré.",
             });
           } catch (genErr) {
-            console.error("Failed to generate invoices after payment:", genErr);
             toast({
               title: "Erreur génération facture",
               description:
@@ -1512,7 +1504,6 @@ export default function Payments() {
         }
       }
     } catch (error) {
-      console.error("Error processing payment:", error);
       const errRec = (error ?? {}) as {
         response?: { status?: number; data?: { message?: string } };
         message?: string;

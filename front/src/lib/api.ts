@@ -17,7 +17,7 @@ const axiosInstance = axios.create({
   baseURL: finalBaseURL,
   // Do not force a global Content-Type header here. Some requests (FormData) must let the browser set the proper multipart boundary.
   withCredentials: false,
-  timeout: 15000, // 15 secondes de timeout pour les émulateurs (plus robuste)
+  timeout: 30000, // 30 secondes pour aligner avec le backend
 });
 
 // Log pour diagnostiquer les problèmes de connexion
@@ -62,6 +62,10 @@ axiosInstance.interceptors.request.use(
     console.log("🚀 Making request to:", config.url);
     console.log("📡 Full URL:", `${config.baseURL}${config.url}`);
 
+    const url = String(config.url || "");
+    if (url.startsWith("/dashboard") || url.startsWith("/users")) {
+      config.timeout = 45000;
+    }
     const token = sessionStorage.getItem("token");
     console.log(
       "Frontend Interceptor - Retrieved Token:",
@@ -213,7 +217,7 @@ export const testConnectivity = async () => {
   try {
     console.log(`🔍 Test de connectivité vers l'API...`);
     // Utilise l'instance axios configurée (passe par le proxy Vite)
-    const response = await axiosInstance.get("/health", { timeout: 5000 });
+    const response = await axiosInstance.get("/health", { timeout: 15000 });
     console.log("✅ API accessible:", response.status);
     return { success: true, status: response.status, data: response.data };
   } catch (error: any) {
@@ -249,18 +253,20 @@ export const testDiagnostic = async () => {
 };
 
 // Test automatique de connectivité au chargement avec gestion d'erreur améliorée
-if (typeof window !== "undefined") {
-  setTimeout(async () => {
-    const result = await testConnectivity();
-    if (!result.success) {
-      console.warn(
-        "⚠️ Émulateur non accessible. Vérifiez que Firebase Emulator est démarré.",
-      );
-      console.log("💡 Solutions possibles:");
-      console.log("   - Vérifiez la connexion internet");
-      console.log("   - Relancez les émulateurs (firebase emulators:start)");
-    }
-  }, 1000);
-}
+// if (typeof window !== "undefined") {
+//   setTimeout(async () => {
+//     const result = await testConnectivity();
+//     if (!result.success) {
+//       console.warn(
+//         "⚠️ Émulateur non accessible. Vérifiez que Firebase Emulator est démarré.",
+//       );
+//       console.log("💡 Solutions possibles:");
+//       console.log("   - Vérifiez la connexion internet");
+//       console.log("   - Relancez les émulateurs (firebase emulators:start)");
+//     }
+//   }, 1000);
+// }
 
 export default axiosInstance;
+
+

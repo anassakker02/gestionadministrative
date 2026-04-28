@@ -33,7 +33,6 @@ export const getParents = async (): Promise<ParentItem[]> => {
 
 export const createParent = async (parent: Omit<ParentItem, "id">): Promise<ParentItem> => {
   try {
-    console.log("Envoi de la requête de création de parent:", parent);
     
     // Validation côté client des données
     if (!parent.nom || !parent.prenom || !parent.email || !parent.password) {
@@ -54,10 +53,7 @@ export const createParent = async (parent: Omit<ParentItem, "id">): Promise<Pare
       etudiant_id: parent.etudiant_id || null,
     };
     
-    console.log("Données parent nettoyées à envoyer:", parentData);
-    
     const response = await apiRequest("/parents", "POST", parentData);
-    console.log("Réponse de l'API /parents:", response);
     
     // Vérifier la réponse
     if (!response || !response.data) {
@@ -74,7 +70,6 @@ export const createParent = async (parent: Omit<ParentItem, "id">): Promise<Pare
       adresse: response.data.adresse,
     };
   } catch (error: any) {
-    console.error("Erreur dans createParent API:", error);
     
     // Améliorer les messages d'erreur
     if (error.message?.includes("encryption") || error.message?.includes("Invalid key length")) {

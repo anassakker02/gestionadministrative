@@ -1,0 +1,6 @@
+services:
+  fraisgestionscolaire4:
+    image: fraisgestionscolaire4
+    build:
+      context: .
+      dockerfile: ./Dockerfile

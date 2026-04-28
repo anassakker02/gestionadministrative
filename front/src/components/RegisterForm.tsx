@@ -1,5 +1,21 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
+
+// ─── Validation mot de passe fort ────────────────────────────────────────────
+const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,}$/;
+
+function getPasswordStrength(pwd: string): { label: string; color: string; score: number } {
+  if (!pwd) return { label: "", color: "", score: 0 };
+  let score = 0;
+  if (pwd.length >= 8) score++;
+  if (/[A-Z]/.test(pwd)) score++;
+  if (/[0-9]/.test(pwd)) score++;
+  if (/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pwd)) score++;
+  if (pwd.length >= 12) score++;
+  if (score <= 2) return { label: "Faible", color: "bg-red-500", score };
+  if (score === 3) return { label: "Moyen", color: "bg-yellow-500", score };
+  return { label: "Fort", color: "bg-green-500", score };
+}
 import {
   Card,
   CardContent,
@@ -33,16 +49,37 @@ export function RegisterForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation mot de passe fort
+    if (!PASSWORD_REGEX.test(formData.password)) {
+      toast({
+        title: "Mot de passe trop faible",
+        description: "Le mot de passe doit contenir au moins 8 caractères, une majuscule, un chiffre et un caractère spécial (!@#$%...).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Vérification confirmation mot de passe
+    if (formData.password !== formData.confirmPassword) {
+      toast({
+        title: "Mots de passe différents",
+        description: "Les deux mots de passe ne correspondent pas.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      // Appel API d'inscription avec le rôle "user" et isActive: false
+      // Rôle forcé à "user" côté client — le backend confirme isActive: false
       await apiRequest("/auth/register", "POST", {
         nom: formData.lastName,
         prenom: formData.firstName,
         email: formData.email,
         password: formData.password,
-        role: "user", // Rôle par défaut pour les nouvelles inscriptions
-        isActive: false, // Compte inactif jusqu'à validation admin
+        role: "user", // Rôle minimal — jamais 'admin'
+        isActive: false,
       });
       
       // Afficher un message de confirmation avec toast
@@ -192,6 +229,29 @@ export function RegisterForm() {
                 </button>
               </div>
             </div>
+
+            {formData.password && (() => {
+              const strength = getPasswordStrength(formData.password);
+              return (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Force du mot de passe</span>
+                    <span className={strength.score >= 4 ? "text-green-600" : strength.score === 3 ? "text-yellow-600" : "text-red-600"}>
+                      {strength.label}
+                    </span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-1.5">
+                    <div
+                      className={`h-1.5 rounded-full transition-all ${strength.color}`}
+                      style={{ width: `${(strength.score / 5) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Requis : 8+ caractères, 1 majuscule, 1 chiffre, 1 caractère spécial
+                  </p>
+                </div>
+              );
+            })()}
 
             <div className="space-y-2">
               <Label

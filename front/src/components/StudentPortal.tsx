@@ -111,9 +111,6 @@ const StudentPortal: React.FC = () => {
         return response.data as StudentDashboard;
       } catch (error) {
         // Si les routes du portail ne fonctionnent pas, utiliser les routes alternatives
-        console.log(
-          "Routes du portail non disponibles, utilisation des routes alternatives",
-        );
 
         // Récupérer les informations de l'utilisateur
         const userResponse = await apiRequest("/auth/me", "GET");
@@ -129,50 +126,19 @@ const StudentPortal: React.FC = () => {
           studentData = studentResponse.data.data?.[0];
         } else if (userData.role === "parent") {
           // Pour un parent, utiliser les informations de l'utilisateur parent
-          console.log(
-            "Récupération des informations du parent depuis la collection users",
-          );
 
           try {
             // Vérifier si le parent a un etudiant_id dans ses données utilisateur
-            console.log(
-              `🔍 Informations du parent: ${userData.prenom} ${userData.nom}`,
-            );
-            console.log(`📧 Email parent: ${userData.email}`);
-            console.log(`📞 Téléphone parent: ${userData.telephone}`);
-            console.log(`🏠 Adresse parent: ${userData.adresse}`);
-            console.log(
-              `🔗 Étudiant lié (etudiant_id): ${userData.etudiant_id || "Aucun"}`,
-            );
 
             if (userData.etudiant_id) {
               // Récupérer les informations de l'étudiant lié en utilisant l'etudiant_id
-              console.log(
-                `🎓 Récupération de l'étudiant avec ID: ${userData.etudiant_id}`,
-              );
               const studentResponse = await apiRequest(
                 `/etudiants/${userData.etudiant_id}`,
                 "GET",
               );
               studentData = studentResponse.data.data;
-              console.log(
-                `✅ Étudiant lié trouvé: ${studentData.prenom} ${studentData.nom}`,
-              );
-              console.log(`📧 Email étudiant: ${studentData.email}`);
-              console.log(`📞 Téléphone étudiant: ${studentData.telephone}`);
-              console.log(`🏠 Adresse étudiant: ${studentData.adresse}`);
-              console.log(
-                `🎓 Classe étudiant: ${studentData.classe?.nom || "Non renseignée"}`,
-              );
-              console.log(
-                `🏆 Bourse étudiant: ${studentData.bourse?.nom || "Aucune"}`,
-              );
-              console.log(
-                `💰 Frais étudiant: ${studentData.frais_payment || 0} DH`,
-              );
             } else {
               // Aucun étudiant lié, créer des données factices basées sur le parent
-              console.log("⚠️ Aucun étudiant lié à ce parent");
               studentData = {
                 id: `parent-${userData.id}`,
                 nom: userData.nom || "Parent",
@@ -189,14 +155,6 @@ const StudentPortal: React.FC = () => {
               };
             }
           } catch (error) {
-            console.log(
-              "❌ Erreur lors de la récupération de l'étudiant lié:",
-              error,
-            );
-            console.log(
-              "📋 Détails de l'erreur:",
-              error.response?.data || error.message,
-            );
             // En cas d'erreur, créer des données factices
             studentData = {
               id: `parent-${userData.id}`,
@@ -263,7 +221,6 @@ const StudentPortal: React.FC = () => {
         return response.data;
       } catch (error) {
         // Si les routes du portail ne fonctionnent pas, utiliser les routes alternatives
-        console.log("Routes du portail non disponibles pour les paiements");
         return { paiements: [] };
       }
     },
@@ -283,7 +240,6 @@ const StudentPortal: React.FC = () => {
         return response.data;
       } catch (error) {
         // Si les routes du portail ne fonctionnent pas, utiliser les routes alternatives
-        console.log("Routes du portail non disponibles pour les factures");
         return [];
       }
     },

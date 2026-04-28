@@ -87,8 +87,7 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({
     },
   });
 
-  const onSubmit = (values: z.infer<typeof formSchema>) => {
-    console.log("Create Class Form Values:", values); // Temporary log
+  const onSubmit = (values: z.infer<typeof formSchema>) => { // Temporary log
     createClassMutation.mutate(values as Classe);
   };
 

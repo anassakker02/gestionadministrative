@@ -1,8 +1,13 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { userService, LoginCredentials } from "@/services/userService";
 import { User } from "@/types/user";
 import { useToast } from "@/hooks/use-toast";
 import { refreshAccessToken } from "@/lib/api"; // Import refreshAccessToken
+import { logSessionExpired, logLogout } from "@/services/logService";
+
+// ─── Déconnexion automatique après 30 min d'inactivité ───────────────────────
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+const ACTIVITY_EVENTS = ["mousemove", "keydown", "click", "touchstart", "scroll"] as const;
 
 interface AuthContextType {
   user: User | null;
@@ -40,6 +45,59 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ─── Timer d'inactivité ─────────────────────────────────────────────────────
+  const clearInactivityTimer = () => {
+    if (inactivityTimer.current) {
+      clearTimeout(inactivityTimer.current);
+      inactivityTimer.current = null;
+    }
+  };
+
+  const resetInactivityTimer = () => {
+    clearInactivityTimer();
+    inactivityTimer.current = setTimeout(() => {
+      performLogout(true);
+    }, INACTIVITY_TIMEOUT_MS);
+  };
+
+  const performLogout = (dueToInactivity = false) => {
+    setUser(null);
+    sessionStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("refreshToken");
+    clearInactivityTimer();
+    if (dueToInactivity) {
+      logSessionExpired();
+      toast({
+        title: "Session expirée",
+        description: "Vous avez été déconnecté après 30 minutes d'inactivité.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      resetInactivityTimer();
+      ACTIVITY_EVENTS.forEach((evt) =>
+        window.addEventListener(evt, resetInactivityTimer)
+      );
+    } else {
+      clearInactivityTimer();
+      ACTIVITY_EVENTS.forEach((evt) =>
+        window.removeEventListener(evt, resetInactivityTimer)
+      );
+    }
+    return () => {
+      clearInactivityTimer();
+      ACTIVITY_EVENTS.forEach((evt) =>
+        window.removeEventListener(evt, resetInactivityTimer)
+      );
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // Vérifier si un utilisateur est connecté au chargement
   useEffect(() => {
@@ -227,10 +285,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
-    setUser(null);
-    sessionStorage.removeItem("user");
-    sessionStorage.removeItem("token");
-    sessionStorage.removeItem("refreshToken"); // Remove refresh token on logout
+    logLogout();
+    performLogout(false);
     toast({
       title: "Déconnexion",
       description: "Vous avez été déconnecté avec succès",

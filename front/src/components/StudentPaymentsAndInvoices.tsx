@@ -268,8 +268,6 @@ export default function StudentPaymentsAndInvoices({
   const paymentsQuery = useQuery({
     queryKey: ["payments", studentId, statusFilter, methodFilter],
     queryFn: () => {
-      console.log("🔍 Récupération des paiements pour l'étudiant:", studentId);
-      console.log("🔍 Filtres:", { statusFilter, methodFilter });
       return getAllPaiements(studentId, statusFilter, methodFilter);
     },
     enabled: !!studentId,
@@ -277,7 +275,6 @@ export default function StudentPaymentsAndInvoices({
   const invoicesQuery = useQuery<{ data?: Facture[] } | Facture[]>({
     queryKey: ["invoices", studentId],
     queryFn: () => {
-      console.log("🔍 Récupération des factures pour l'étudiant:", studentId);
       return getFacturesByStudent(studentId);
     },
     enabled: !!studentId,
@@ -286,7 +283,6 @@ export default function StudentPaymentsAndInvoices({
   const paymentsAll: Paiement[] = useMemo(
     () => {
       const payments = paymentsQuery.data?.data || [];
-      console.log("📊 Paiements récupérés:", payments.length, payments);
       return payments;
     },
     [paymentsQuery.data]
@@ -310,8 +306,6 @@ export default function StudentPaymentsAndInvoices({
         payment.facture_ids && payment.facture_ids.includes(invoice.id || '')
       );
     });
-    
-    console.log("📊 Factures filtrées (avec paiements):", paidInvoices.length, paidInvoices);
     return paidInvoices;
   }, [invoicesQuery.data, paymentsAll]);
 
@@ -347,10 +341,8 @@ export default function StudentPaymentsAndInvoices({
           };
 
           setStudentInfo(info);
-          console.log("📊 Student info loaded:", info);
         }
       } catch (error) {
-        console.error("Erreur lors de la récupération de l'étudiant:", error);
       }
     };
 
@@ -494,7 +486,6 @@ export default function StudentPaymentsAndInvoices({
       });
       return undefined;
     } catch (e) {
-      console.error("Erreur lors de l'ouverture du PDF de la facture:", e);
       toast({
         title: "Erreur",
         description: "Impossible d'ouvrir le PDF de la facture.",
@@ -539,12 +530,6 @@ export default function StudentPaymentsAndInvoices({
 
     try {
       // Ici, vous pouvez appeler l'API pour créer le paiement
-      console.log("Création du paiement:", {
-        etudiant_id: selectedStudentForPayment.id,
-        montant: data.montant,
-        methode: data.methode,
-        description: data.description,
-      });
 
       toast({
         title: "Paiement effectué",
@@ -572,24 +557,13 @@ export default function StudentPaymentsAndInvoices({
   if (paymentsQuery.isLoading || invoicesQuery.isLoading)
     return <div>Chargement…</div>;
   if (paymentsQuery.error) {
-    console.error("❌ Erreur chargement des paiements:", paymentsQuery.error);
     return <div>Erreur chargement des paiements: {paymentsQuery.error.message}</div>;
   }
   if (invoicesQuery.error) {
-    console.error("❌ Erreur chargement des factures:", invoicesQuery.error);
     return <div>Erreur chargement des factures: {invoicesQuery.error.message}</div>;
   }
 
   // Debug info
-  console.log("🔍 Debug Info:");
-  console.log("- Student ID:", studentId);
-  console.log("- Student Info:", studentInfo);
-  console.log("- Payments Query Status:", paymentsQuery.status);
-  console.log("- Payments Query Data:", paymentsQuery.data);
-  console.log("- Invoices Query Status:", invoicesQuery.status);
-  console.log("- Invoices Query Data:", invoicesQuery.data);
-  console.log("- Payments All:", paymentsAll);
-  console.log("- Invoices:", invoices);
 
   return (
     <div className="space-y-6">
@@ -610,7 +584,6 @@ export default function StudentPaymentsAndInvoices({
                   if (studentInfo) {
                     handlePayClick(studentInfo);
                   } else {
-                    console.log("❌ StudentInfo not available");
                     toast({
                       title: "Erreur",
                       description: "Impossible de charger les informations de l'étudiant",

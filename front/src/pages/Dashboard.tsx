@@ -157,7 +157,6 @@ export default function Dashboard() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (exportError) {
-      console.error("Erreur lors de l'exportation CSV:", exportError);
       // Handle error, e.g., show a toast notification
     }
   };

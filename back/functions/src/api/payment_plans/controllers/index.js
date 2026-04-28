@@ -15,14 +15,35 @@ class PaymentPlanController {
     try {
       const { name, anneeScolaire, installments } = req.body;
 
-      if (!name || !anneeScolaire || !installments || !Array.isArray(installments) || installments.length === 0) {
-        return res.status(400).json({ status: false, message: "Nom, année scolaire et au moins un versement sont requis." });
+      if (
+        !name ||
+        !anneeScolaire ||
+        !installments ||
+        !Array.isArray(installments) ||
+        installments.length === 0
+      ) {
+        return res
+          .status(400)
+          .json({
+            status: false,
+            message:
+              "Nom, année scolaire et au moins un versement sont requis.",
+          });
       }
 
       // Validate installments structure
       for (const inst of installments) {
-        if (typeof inst.percentage !== 'number' || typeof inst.dueDateOffsetMonths !== 'number' || typeof inst.description !== 'string') {
-          return res.status(400).json({ status: false, message: "Structure des versements invalide." });
+        if (
+          typeof inst.percentage !== "number" ||
+          typeof inst.dueDateOffsetMonths !== "number" ||
+          typeof inst.description !== "string"
+        ) {
+          return res
+            .status(400)
+            .json({
+              status: false,
+              message: "Structure des versements invalide.",
+            });
         }
       }
 
@@ -51,10 +72,21 @@ class PaymentPlanController {
         ...newPaymentPlan.data(),
       });
 
-      return res.status(201).json({ status: true, data: { id: newPaymentPlan.id, ...newPaymentPlan.data() } });
+      return res
+        .status(201)
+        .json({
+          status: true,
+          data: { id: newPaymentPlan.id, ...newPaymentPlan.data() },
+        });
     } catch (error) {
       console.error("Erreur lors de la création du plan de paiement:", error);
-      return res.status(500).json({ status: false, message: "Erreur interne du serveur", error: error.message });
+      return res
+        .status(500)
+        .json({
+          status: false,
+          message: "Erreur interne du serveur",
+          error: error.message,
+        });
     }
   }
 
@@ -64,12 +96,36 @@ class PaymentPlanController {
    */
   async getAll(req, res) {
     try {
-      const snapshot = await this.collection.orderBy("anneeScolaire", "desc").orderBy("name").get();
-      const paymentPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      return res.status(200).json({ status: true, data: paymentPlans });
+      const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+      const page = parseInt(req.query.page) || 1;
+      const offset = (page - 1) * limit;
+
+      const countSnap = await this.collection.count().get();
+      const total = countSnap.data().count;
+
+      const snapshot = await this.collection
+        .orderBy("anneeScolaire", "desc")
+        .orderBy("name")
+        .limit(limit + offset)
+        .get();
+
+      const docs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const paginatedPlans = docs.slice(offset, offset + limit);
+
+      return res.status(200).json({
+        status: true,
+        data: paginatedPlans,
+        pagination: { total, limit, page },
+      });
     } catch (error) {
-      console.error("Erreur lors de la récupération des plans de paiement:", error);
-      return res.status(500).json({ status: false, message: "Erreur interne du serveur", error: error.message });
+      console.error("Erreur getAll payment-plans:", error);
+      return res
+        .status(500)
+        .json({
+          status: false,
+          message: "Erreur interne du serveur",
+          error: error.message,
+        });
     }
   }
 
@@ -83,13 +139,26 @@ class PaymentPlanController {
 
       const doc = await this.collection.doc(id).get();
       if (!doc.exists) {
-        return res.status(404).json({ status: false, message: "Plan de paiement non trouvé." });
+        return res
+          .status(404)
+          .json({ status: false, message: "Plan de paiement non trouvé." });
       }
 
-      return res.status(200).json({ status: true, data: { id: doc.id, ...doc.data() } });
+      return res
+        .status(200)
+        .json({ status: true, data: { id: doc.id, ...doc.data() } });
     } catch (error) {
-      console.error("Erreur lors de la récupération du plan de paiement:", error);
-      return res.status(500).json({ status: false, message: "Erreur interne du serveur", error: error.message });
+      console.error(
+        "Erreur lors de la récupération du plan de paiement:",
+        error,
+      );
+      return res
+        .status(500)
+        .json({
+          status: false,
+          message: "Erreur interne du serveur",
+          error: error.message,
+        });
     }
   }
 
@@ -106,7 +175,9 @@ class PaymentPlanController {
       const doc = await docRef.get();
 
       if (!doc.exists) {
-        return res.status(404).json({ status: false, message: "Plan de paiement non trouvé." });
+        return res
+          .status(404)
+          .json({ status: false, message: "Plan de paiement non trouvé." });
       }
 
       const oldPaymentPlanData = doc.data();
@@ -119,11 +190,25 @@ class PaymentPlanController {
       if (anneeScolaire) updateData.anneeScolaire = anneeScolaire.trim();
       if (installments) {
         if (!Array.isArray(installments) || installments.length === 0) {
-          return res.status(400).json({ status: false, message: "Structure des versements invalide." });
+          return res
+            .status(400)
+            .json({
+              status: false,
+              message: "Structure des versements invalide.",
+            });
         }
         for (const inst of installments) {
-          if (typeof inst.percentage !== 'number' || typeof inst.dueDateOffsetMonths !== 'number' || typeof inst.description !== 'string') {
-            return res.status(400).json({ status: false, message: "Structure des versements invalide." });
+          if (
+            typeof inst.percentage !== "number" ||
+            typeof inst.dueDateOffsetMonths !== "number" ||
+            typeof inst.description !== "string"
+          ) {
+            return res
+              .status(400)
+              .json({
+                status: false,
+                message: "Structure des versements invalide.",
+              });
           }
         }
         updateData.installments = installments;
@@ -137,7 +222,10 @@ class PaymentPlanController {
         action: "UPDATE_PAYMENT_PLAN",
         entityType: "PaymentPlan",
         entityId: id,
-        details: { oldData: oldPaymentPlanData, newData: updatedPaymentPlan.data() },
+        details: {
+          oldData: oldPaymentPlanData,
+          newData: updatedPaymentPlan.data(),
+        },
       });
       await auditLog.save();
 
@@ -147,10 +235,24 @@ class PaymentPlanController {
         newData: updatedPaymentPlan.data(),
       });
 
-      return res.status(200).json({ status: true, data: { id: updatedPaymentPlan.id, ...updatedPaymentPlan.data() } });
+      return res
+        .status(200)
+        .json({
+          status: true,
+          data: { id: updatedPaymentPlan.id, ...updatedPaymentPlan.data() },
+        });
     } catch (error) {
-      console.error("Erreur lors de la mise à jour du plan de paiement:", error);
-      return res.status(500).json({ status: false, message: "Erreur interne du serveur", error: error.message });
+      console.error(
+        "Erreur lors de la mise à jour du plan de paiement:",
+        error,
+      );
+      return res
+        .status(500)
+        .json({
+          status: false,
+          message: "Erreur interne du serveur",
+          error: error.message,
+        });
     }
   }
 
@@ -166,15 +268,27 @@ class PaymentPlanController {
       const doc = await docRef.get();
 
       if (!doc.exists) {
-        return res.status(404).json({ status: false, message: "Plan de paiement non trouvé." });
+        return res
+          .status(404)
+          .json({ status: false, message: "Plan de paiement non trouvé." });
       }
 
       const deletedPaymentPlanData = doc.data();
 
       // Optional: Check if any students are using this payment plan before deleting
-      const studentsUsingPlan = await db.collection("etudiants").where("paymentPlanId", "==", id).limit(1).get();
+      const studentsUsingPlan = await db
+        .collection("etudiants")
+        .where("paymentPlanId", "==", id)
+        .limit(1)
+        .get();
       if (!studentsUsingPlan.empty) {
-        return res.status(400).json({ status: false, message: "Impossible de supprimer ce plan de paiement car il est utilisé par des étudiants." });
+        return res
+          .status(400)
+          .json({
+            status: false,
+            message:
+              "Impossible de supprimer ce plan de paiement car il est utilisé par des étudiants.",
+          });
       }
 
       await docRef.delete();
@@ -195,8 +309,17 @@ class PaymentPlanController {
 
       return res.status(204).send(); // 204 No Content for successful deletion
     } catch (error) {
-      console.error("Erreur lors de la suppression du plan de paiement:", error);
-      return res.status(500).json({ status: false, message: "Erreur interne du serveur", error: error.message });
+      console.error(
+        "Erreur lors de la suppression du plan de paiement:",
+        error,
+      );
+      return res
+        .status(500)
+        .json({
+          status: false,
+          message: "Erreur interne du serveur",
+          error: error.message,
+        });
     }
   }
 }

@@ -2,8 +2,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import "@/utils/diagnostic"; // Import du diagnostic
-import "@/utils/debug-api"; // Import du debug API
+// import "@/utils/diagnostic"; // Import du diagnostic
+// import "@/utils/debug-api"; // Import du debug API
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
@@ -17,6 +17,7 @@ import FactureDetail from "./pages/FactureDetail.tsx";
 import PaymentManagement from "./pages/PaymentManagement";
 import TestPage from "./pages/TestPage";
 import NotFound from "./pages/NotFound";
+import Unauthorized from "./pages/Unauthorized";
 import { SchoolLayout } from "./components/SchoolLayout";
 import Profile from "./pages/Profile";
 import Logout from "./pages/Logout";
@@ -33,11 +34,12 @@ import StudentPaymentView from "./pages/StudentPaymentView";
 import ParentStudentPortalPage from "./pages/ParentStudentPortalPage";
 import PaymentPlansPage from "./pages/PaymentPlansPage";
 import StudentPortalPage from "./pages/StudentPortalPage";
+import Monitoring from "./pages/Monitoring";
 
 // Composant pour la redirection automatique basée sur le rôle
 const RoleBasedRedirect = () => {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-secondary">
@@ -48,20 +50,20 @@ const RoleBasedRedirect = () => {
       </div>
     );
   }
-  
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  
+
   // Redirection basée sur le rôle
   switch (user.role) {
-    case 'admin':
-    case 'sous-admin':
-    case 'comptable':
+    case "admin":
+    case "sous-admin":
+    case "comptable":
       return <Navigate to="/dashboard" replace />;
-    case 'etudiant':
+    case "etudiant":
       return <Navigate to="/portal" replace />;
-    case 'parent':
+    case "parent":
       return <Navigate to="/portal" replace />;
     default:
       return <Navigate to="/login" replace />;
@@ -100,7 +102,9 @@ const App = () => (
       <Route
         path="/students/:id"
         element={
-          <ProtectedRoute roles={["admin", "sous-admin", "comptable", "etudiant"]}>
+          <ProtectedRoute
+            roles={["admin", "sous-admin", "comptable", "etudiant"]}
+          >
             <SchoolLayout>
               <StudentDetails />
             </SchoolLayout>
@@ -111,7 +115,9 @@ const App = () => (
       <Route
         path="/students/:id/payments"
         element={
-          <ProtectedRoute roles={["admin", "sous-admin", "comptable", "etudiant"]}>
+          <ProtectedRoute
+            roles={["admin", "sous-admin", "comptable", "etudiant"]}
+          >
             <SchoolLayout>
               <StudentPaymentView />
             </SchoolLayout>
@@ -181,7 +187,9 @@ sous admin           <ProtectedRoute roles={["admin", "sous-admin", "comptable"]
       <Route
         path="/factures/:id"
         element={
-          <ProtectedRoute roles={["admin", "sous-admin", "comptable", "etudiant"]}>
+          <ProtectedRoute
+            roles={["admin", "sous-admin", "comptable", "etudiant"]}
+          >
             <SchoolLayout>
               <FactureDetail />
             </SchoolLayout>
@@ -260,6 +268,16 @@ sous admin           <ProtectedRoute roles={["admin", "sous-admin", "comptable"]
         }
       />
       <Route
+        path="/monitoring"
+        element={
+          <ProtectedRoute roles={["admin"]}>
+            <SchoolLayout>
+              <Monitoring />
+            </SchoolLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/portal"
         element={
           <ProtectedRoute>
@@ -300,7 +318,18 @@ sous admin           <ProtectedRoute roles={["admin", "sous-admin", "comptable"]
         }
       />
       <Route path="/test" element={<TestPage />} />
+      <Route
+        path="/monitoring"
+        element={
+          <ProtectedRoute roles={["admin"]}>
+            <SchoolLayout>
+              <Monitoring />
+            </SchoolLayout>
+          </ProtectedRoute>
+        }
+      />
       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+      <Route path="/unauthorized" element={<Unauthorized />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </>

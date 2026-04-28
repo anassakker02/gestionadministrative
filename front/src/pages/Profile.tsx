@@ -158,7 +158,6 @@ export default function Profile() {
         description: "Vos informations ont été mises à jour avec succès.",
       });
     } catch (error) {
-      console.error("Erreur lors de la mise à jour du profil:", error);
       toast({
         title: "Erreur",
         description:
@@ -187,7 +186,6 @@ export default function Profile() {
         description: "Votre mot de passe a été modifié avec succès.",
       });
     } catch (error) {
-      console.error("Erreur lors du changement de mot de passe:", error);
       toast({
         title: "Erreur",
         description:

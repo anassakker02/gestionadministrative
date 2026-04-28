@@ -1,0 +1,126 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  IMAGE 1 — ONGLET WAF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+À L'ORAL :
+
+"Ici on voit l'onglet WAF — le pare-feu applicatif.
+Il a bloqué 70 attaques en 24 heures, dont 9 dans la dernière heure.
+
+On voit la répartition par type :
+- 18 injections SQL — l'attaquant essaie de manipuler la base de données
+- 18 XSS — l'attaquant essaie d'injecter du JavaScript
+- 12 Path Traversal — l'attaquant essaie d'accéder aux fichiers serveur
+- 8 scanners automatiques comme sqlmap et nikto
+- 2 injections de commande
+
+Dans le tableau en bas, on voit chaque attaque en détail :
+quelle requête, depuis quelle IP, et à quelle heure.
+
+Toutes ces attaques ont reçu un HTTP 403 et ont été
+automatiquement enregistrées dans Firestore auditLogs."
+
+DANS LE RAPPORT :
+
+Le pare-feu applicatif (WAF) a intercepté 70 requêtes malveillantes
+en 24 heures, couvrant les principales menaces de l'OWASP Top 10 :
+injections SQL (A03, 26%), Cross-Site Scripting (A03, 26%),
+Path Traversal (A01, 17%), scanners automatisés (11%) et injection
+de commandes (3%). Chaque attaque bloquée est tracée dans Firestore
+avec l'IP source, le chemin ciblé et l'horodatage.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  IMAGE 2 — ONGLET SIEM LOGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+À L'ORAL :
+
+"Ici on voit l'onglet SIEM Logs — le journal centralisé.
+
+En haut les compteurs : 37 événements d'authentification,
+21 refus d'accès RBAC, 25 opérations RGPD, 70 blocages WAF.
+
+En bas le journal des 20 derniers événements en temps réel.
+On voit tout mélangé : exports RGPD, attaques WAF bloquées,
+échecs de connexion, blocages brute force, accès refusés.
+
+Par exemple :
+- etudiant1@school.fr a exporté ses données via l'article 15
+- admin@school.fr a anonymisé un compte via l'article 17
+- Une injection SQL a été bloquée sur /v1/etudiants
+
+Ces logs sont infalsifiables : les règles Firestore interdisent
+toute modification ou suppression, même pour un administrateur.
+L'horodatage est généré côté serveur."
+
+DANS LE RAPPORT :
+
+Le SIEM centralise en temps réel les événements issus de Firestore.
+Sur la période de test : 37 événements d'authentification, 21 refus
+d'accès RBAC, 25 opérations RGPD et 70 blocages WAF. L'intégrité
+des logs est garantie par les règles Firestore (allow update/delete:
+if false) et le serverTimestamp() côté serveur, satisfaisant les
+exigences de non-répudiation de l'article 5 du RGPD.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  IMAGE 3 — ONGLET DASHBOARD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+À L'ORAL :
+
+"Ici l'onglet Dashboard — la vue synthétique.
+
+Le score 35/100 est normal pendant une attaque — en production
+sans attaque il est entre 85 et 100. Plus le système détecte
+d'attaques, plus il alerte — c'est son rôle.
+
+3 alertes automatiques sont actives :
+- Brute force : plus de 5 comptes bloqués en 24h
+- Escalade de privilèges : plus de 10 accès refusés
+- Attaque WAF : plus de 10 requêtes malveillantes
+
+Section 1 — Authentification :
+3 connexions réussies, 15 échecs, 14 comptes bloqués.
+Protections actives : JWT HS256, bcrypt, rate limiting,
+blocage après 5 tentatives, timeout 30 minutes.
+
+Section 2 — RGPD :
+15 exports article 15, 10 anonymisations article 17.
+Chiffrement AES-256-CBC, conformité Art.15/16/17/33.
+
+Section 3 — RBAC :
+21 accès refusés. 4 rôles avec Firestore Rules deny by default.
+
+Section 4 — Audit Logs :
+153 événements au total — immuables, conservés 1 an."
+
+DANS LE RAPPORT :
+
+Le tableau de bord présente un score de sécurité de 35/100 lors
+de la simulation d'attaques, avec 3 alertes critiques déclenchées
+automatiquement. La section Authentification enregistre 15 échecs
+de connexion et 14 blocages résultant du brute force simulé.
+La section RGPD trace 15 exports (Art.15) et 10 anonymisations
+(Art.17). Le RBAC enregistre 21 refus d'accès grâce au principe
+de moindre privilège. La journalisation comptabilise 153 événements
+immuables conservés 1 an, conformément aux obligations légales.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUESTIONS DU JURY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q : Pourquoi 35/100 ?
+R : Score normal en mode attaque. Sans attaque = 85-100.
+    Plus le système détecte, plus il alerte — c'est son rôle.
+
+Q : Les logs peuvent être falsifiés ?
+R : Non. Firestore interdit toute modification avec
+    allow update/delete: if false. Même un admin ne peut
+    pas changer un log. Horodatage généré côté serveur.
+
+Q : Différence WAF et SIEM ?
+R : WAF = bloque les attaques en temps réel avant la BDD.
+    SIEM = journalise TOUT pour que l'admin voie tout.

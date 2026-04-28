@@ -59,7 +59,6 @@ const StudentPaymentView = () => {
   const { user } = useAuth();
   
   // Debug: Vérifier que l'ID est bien récupéré
-  console.log('StudentPaymentView - ID récupéré:', id);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
@@ -84,9 +83,7 @@ const StudentPaymentView = () => {
       if (!id) {
         throw new Error("ID de l'étudiant manquant");
       }
-      console.log('Récupération des données pour l\'étudiant ID:', id);
       const response = await studentService.getStudent(id);
-      console.log('Données de l\'étudiant récupérées:', response.data);
       return response.data;
     },
     enabled: !!id,
@@ -214,7 +211,6 @@ const StudentPaymentView = () => {
       paymentsQuery.refetch();
       
     } catch (error) {
-      console.error("Erreur lors de la création du paiement:", error);
       toast({
         title: "Erreur",
         description: "Impossible de créer le paiement",

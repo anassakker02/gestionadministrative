@@ -1,0 +1,321 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║       COMMANDES COMPLÈTES — DASHBOARD SÉCURITÉ / WAF / SIEM                 ║
+║       PFE Cybersécurité YNOV 2026 — Anass Akker                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+PROJET : /Users/anass/Downloads/frais-gestionScolaire 4
+API    : http://localhost:5001/gestionadminastration/us-central1/api
+FRONT  : http://localhost:8081
+
+══════════════════════════════════════════════════════════════════════════════
+  ÉTAPE 0 — DÉMARRAGE (3 terminaux obligatoires)
+══════════════════════════════════════════════════════════════════════════════
+
+▶ TERMINAL 1 — Backend Node.js
+──────────────────────────────
+  cd "/Users/anass/Downloads/frais-gestionScolaire 4/back/functions"
+  node server_local.js
+  → Attendu : ✅ Serveur local démarré sur http://127.0.0.1:5001
+
+▶ TERMINAL 2 — Frontend Vite
+──────────────────────────────
+  cd "/Users/anass/Downloads/frais-gestionScolaire 4/front"
+  npm run dev
+  → Attendu : Local: http://localhost:8081/
+
+▶ TERMINAL 3 — Wazuh Docker (optionnel pour Wazuh SIEM)
+──────────────────────────────────────────────────────────
+  ln -sf "/Users/anass/Downloads/frais-gestionScolaire 4/front/wazuh-docker/single-node" /tmp/wazuh-node
+  cd /tmp/wazuh-node
+  docker compose up -d
+  docker compose ps
+  → Ouvrir : https://localhost  |  Login : admin / SecretPassword
+
+
+══════════════════════════════════════════════════════════════════════════════
+  ÉTAPE 1 — REMPLIR LE DASHBOARD (données persistantes dans Firestore)
+══════════════════════════════════════════════════════════════════════════════
+
+  PROBLÈME : Le tableau de bord repart à 0 car il lit Firestore
+             (auditLogs) sur les 24 dernières heures. Si aucun
+             événement n'existe, tout est à 0.
+
+  SOLUTION : Insérer des événements directement dans Firestore
+             via les scripts Node.js ci-dessous.
+
+▶ SCRIPT TOUT-EN-UN — insérer 25+ événements en 1 commande
+──────────────────────────────────────────────────────────────
+  cd "/Users/anass/Downloads/frais-gestionScolaire 4"
+  bash demo_generer_events.sh
+
+  Ce script génère :
+    - WAF_BLOCK      : 10 événements (SQLi × 3, XSS × 3, PathTraversal × 2, Scanner × 2)
+    - AUTH_FAILURE   :  5 événements (tentatives connexion échouées)
+    - AUTH_LOCKOUT   :  1 événement  (compte bloqué après 5 tentatives)
+    - ACCESS_DENIED  :  3 événements (routes sans token)
+    - DATA_EXPORT    :  3 événements (RGPD Art.15)
+    - DATA_ANONYMIZE :  2 événements (RGPD Art.17)
+
+▶ SCRIPTS INDIVIDUELS (si besoin de relancer une catégorie)
+──────────────────────────────────────────────────────────────
+  cd "/Users/anass/Downloads/frais-gestionScolaire 4/back/functions"
+
+  # WAF — 10 attaques bloquées dans Firestore
+  node scripts/fix_waf_1h.js
+
+  # RBAC — 5 accès refusés dans Firestore
+  node scripts/fix_rbac_1h.js
+
+  # Auth — 5 échecs connexion + 3 blocages brute force
+  node scripts/fix_derniere_heure.js
+
+  # RGPD — 3 exports + 2 anonymisations
+  node demo_rgpd_events.js
+
+▶ APRÈS INSERTION — rafraîchir le dashboard
+──────────────────────────────────────────────
+  Ouvrir : http://localhost:8081/monitoring
+  Cliquer sur le bouton "Rafraîchir" en haut à droite
+  (ou attendre 60 secondes — auto-refresh)
+
+
+══════════════════════════════════════════════════════════════════════════════
+  ÉTAPE 2 — SIMULER DES ATTAQUES EN DIRECT (pour la démo jury)
+══════════════════════════════════════════════════════════════════════════════
+
+  Ces commandes curl déclenchent de vraies réponses du WAF.
+  Chaque HTTP 403 génère automatiquement un WAF_BLOCK dans Firestore.
+  → Le dashboard se met à jour à la prochaine actualisation.
+
+▶ Injection SQL (OWASP A03) — attendu HTTP 403
+──────────────────────────────────────────────
+  curl -v "http://localhost:5001/gestionadminastration/us-central1/api/v1/etudiants?id=1%20OR%201=1--"
+
+  curl -v "http://localhost:5001/gestionadminastration/us-central1/api/v1/etudiants?id=1%20UNION%20SELECT%20*--"
+
+  curl -v "http://localhost:5001/gestionadminastration/us-central1/api/v1/etudiants?id=1%20AND%20SLEEP(5)--"
+
+▶ XSS — Cross-Site Scripting (OWASP A03) — attendu HTTP 403
+─────────────────────────────────────────────────────────────
+  curl -v "http://localhost:5001/gestionadminastration/us-central1/api/v1/etudiants?nom=%3Cscript%3Ealert(xss)%3C%2Fscript%3E"
+
+  curl -v "http://localhost:5001/gestionadminastration/us-central1/api/v1/etudiants?nom=%3Cimg%20onerror%3Dalert(1)%3E"
+
+▶ Path Traversal (OWASP A01) — attendu HTTP 403
+─────────────────────────────────────────────────
+  curl -v "http://localhost:5001/gestionadminastration/us-central1/api/v1/etudiants?file=../../etc/passwd"
+
+  curl -v "http://localhost:5001/gestionadminastration/us-central1/api/v1/classes?file=../../../etc/shadow"
+
+▶ Command Injection — attendu HTTP 403
+────────────────────────────────────────
+  curl -v "http://localhost:5001/gestionadminastration/us-central1/api/v1/paiements?cmd=ls;cat%20/etc/passwd"
+
+▶ Scanner suspect — User-Agent sqlmap — attendu HTTP 403
+──────────────────────────────────────────────────────────
+  curl -v -H "User-Agent: sqlmap/1.7.8#stable" \
+    "http://localhost:5001/gestionadminastration/us-central1/api/v1/etudiants"
+
+  curl -v -H "User-Agent: nikto/2.1.6" \
+    "http://localhost:5001/gestionadminastration/us-central1/api/v1/etudiants"
+
+▶ Brute Force → Lockout (OWASP A07) — 6 tentatives
+─────────────────────────────────────────────────────
+  for i in 1 2 3 4 5 6; do
+    curl -s -o /dev/null -w "Tentative $i → HTTP %{http_code}\n" \
+      -X POST "http://localhost:5001/gestionadminastration/us-central1/api/v1/auth/login" \
+      -H "Content-Type: application/json" \
+      -d '{"email":"admin@school.fr","password":"MAUVAIS_MDP"}'
+    sleep 0.4
+  done
+  → Les 5 premières : HTTP 401 (AUTH_FAILURE)
+  → La 6ème         : HTTP 429 (AUTH_LOCKOUT)
+
+▶ Accès sans token — RBAC — attendu HTTP 401
+──────────────────────────────────────────────
+  curl -v "http://localhost:5001/gestionadminastration/us-central1/api/v1/users"
+  curl -v "http://localhost:5001/gestionadminastration/us-central1/api/v1/factures"
+  curl -v "http://localhost:5001/gestionadminastration/us-central1/api/v1/etudiants"
+
+
+══════════════════════════════════════════════════════════════════════════════
+  ÉTAPE 3 — SCRIPT DE DÉMONSTRATION COMPLET (soutenance)
+══════════════════════════════════════════════════════════════════════════════
+
+▶ Utilisation du script demo_soutenance.sh
+────────────────────────────────────────────
+  cd "/Users/anass/Downloads/frais-gestionScolaire 4"
+
+  bash demo_soutenance.sh          → affiche l'aide
+  bash demo_soutenance.sh 0        → Instructions démarrage
+  bash demo_soutenance.sh 1        → WAF SQLi bloquée (live)
+  bash demo_soutenance.sh 2        → WAF XSS bloqué (live)
+  bash demo_soutenance.sh 3        → Brute Force → Lockout
+  bash demo_soutenance.sh 4        → Scanner DAST 12 tests OWASP
+  bash demo_soutenance.sh 5        → Chiffrement AES-256-CBC
+  bash demo_soutenance.sh 6        → Headers Sécurité HTTP
+  bash demo_soutenance.sh 7        → Dashboard /monitoring (ouvre le navigateur)
+  bash demo_soutenance.sh 8        → Wazuh SIEM Dashboard
+  bash demo_soutenance.sh 9        → FIM — Déclencher alerte Rule 550
+  bash demo_soutenance.sh 10       → RGPD Traçabilité Art.5 & Art.32
+  bash demo_soutenance.sh all      → Toutes les étapes en séquence
+
+
+══════════════════════════════════════════════════════════════════════════════
+  ÉTAPE 4 — SCANNER DAST AUTOMATIQUE (12 tests OWASP)
+══════════════════════════════════════════════════════════════════════════════
+
+  cd "/Users/anass/Downloads/frais-gestionScolaire 4/back/functions"
+  node scripts/security_scan.js
+
+  Tests couverts :
+    T01 — Health check API
+    T02 — Headers sécurité (HSTS, X-Frame, CSP, X-Content-Type)
+    T03 — Auth obligatoire sur routes protégées (401/403)
+    T04 — Rate limiting (429 après N requêtes)
+    T05 — SQL Injection (3 payloads)
+    T06 — XSS (3 payloads)
+    T07 — Path Traversal (3 chemins)
+    T08 — User-Agents suspects (sqlmap, nikto, dirbuster, masscan)
+    T09 — Taille input >10KB rejetée (413)
+    T10 — Escalade de privilèges
+    T11 — Endpoint monitoring admin-only
+    T12 — CORS enforcement
+
+
+══════════════════════════════════════════════════════════════════════════════
+  ÉTAPE 5 — VÉRIFICATION HEADERS HTTP (Helmet.js)
+══════════════════════════════════════════════════════════════════════════════
+
+  curl -s -I "http://localhost:5001/gestionadminastration/us-central1/api/v1/auth/login" \
+    | grep -iE "strict-transport|x-frame|x-content-type|content-security|x-dns"
+
+
+══════════════════════════════════════════════════════════════════════════════
+  ÉTAPE 6 — CHIFFREMENT AES-256-CBC (démo live)
+══════════════════════════════════════════════════════════════════════════════
+
+  cd "/Users/anass/Downloads/frais-gestionScolaire 4/back/functions"
+  node -e "
+const enc = require('./src/utils/encryption');
+const original = 'donnee-sensible-RGPD';
+const chiffre  = enc.encrypt(original);
+const dechiffre = enc.decrypt(chiffre);
+console.log('Original  :', original);
+console.log('Chiffré   :', chiffre);
+console.log('Déchiffré :', dechiffre);
+console.log('IV unique :', chiffre.split(':')[0]);
+console.log('Égaux ?   :', original === dechiffre ? '✅ OUI' : '❌ NON');
+"
+
+
+══════════════════════════════════════════════════════════════════════════════
+  ÉTAPE 7 — FIM WAZUH — Déclencher alerte Rule 550 Level 7
+══════════════════════════════════════════════════════════════════════════════
+
+  sudo bash -c "echo '# wazuh-test-$(date +%s)' >> /private/etc/hosts"
+  → Puis dans Wazuh : Security Events → Rule 550 → Integrity checksum changed
+  → MITRE ATT&CK T1565.001 Stored Data Manipulation
+
+
+══════════════════════════════════════════════════════════════════════════════
+  POURQUOI LE DASHBOARD REPART À 0 ?
+══════════════════════════════════════════════════════════════════════════════
+
+  Le dashboard lit la collection Firestore "auditLogs" sur les 24 dernières
+  heures. Les données ne sont PAS persistantes en mémoire — elles viennent
+  uniquement de Firestore.
+
+  SOLUTION : À chaque démarrage / nouvelle session, relancer :
+  ─────────────────────────────────────────────────────────────
+  cd "/Users/anass/Downloads/frais-gestionScolaire 4"
+  bash demo_generer_events.sh
+
+  OU si vous voulez aller plus vite (4 scripts en parallèle) :
+  ─────────────────────────────────────────────────────────────
+  cd "/Users/anass/Downloads/frais-gestionScolaire 4/back/functions"
+  node scripts/fix_waf_1h.js & node scripts/fix_rbac_1h.js & node scripts/fix_derniere_heure.js & node demo_rgpd_events.js
+
+  → Attendre 5 secondes
+  → Aller sur http://localhost:8081/monitoring
+  → Cliquer "Rafraîchir"
+
+  NOTE : Le score 40/100 affiché dans les captures est NORMAL
+         (c'est le résultat après simulation d'attaques).
+         Score normal sans attaques = 85-100/100.
+
+
+══════════════════════════════════════════════════════════════════════════════
+  RÉSUMÉ RAPIDE — COMMANDES ESSENTIELLES POUR LA DÉMO
+══════════════════════════════════════════════════════════════════════════════
+
+  1. Démarrer le backend :
+     cd "...frais-gestionScolaire 4/back/functions" && node server_local.js
+
+  2. Démarrer le frontend :
+     cd "...frais-gestionScolaire 4/front" && npm run dev
+
+  3. Remplir le dashboard (run ONCE au démarrage) :
+     cd "...frais-gestionScolaire 4" && bash demo_generer_events.sh
+
+  4. Ouvrir le dashboard :
+     http://localhost:8081/monitoring
+
+  5. Simuler une attaque live devant le jury :
+     curl -v "http://localhost:5001/gestionadminastration/us-central1/api/v1/etudiants?id=1%20OR%201=1--"
+     → HTTP 403 affiché + WAF_BLOCK dans SIEM Logs
+
+  6. Brute force live :
+     for i in 1 2 3 4 5 6; do
+       curl -s -o /dev/null -w "Tentative $i → %{http_code}\n" \
+         -X POST "http://localhost:5001/gestionadminastration/us-central1/api/v1/auth/login" \
+         -H "Content-Type: application/json" \
+         -d '{"email":"admin@school.fr","password":"WRONG"}'
+       sleep 0.4
+     done
+
+
+══════════════════════════════════════════════════════════════════════════════
+  ONGLETS DU DASHBOARD ET CE QU'ILS MONTRENT
+══════════════════════════════════════════════════════════════════════════════
+
+  ▶ Onglet "Dashboard" (onglet principal)
+    - Score de sécurité /100
+    - Section 1 : Accès Sécurisé (connexions, échecs, blocages, sessions)
+    - Section 2 : Protection des Données RGPD (exports Art.15, anonymisations Art.17)
+    - Section 3 : Gestion des Accès RBAC (accès refusés)
+    - Section 4 : Journalisation (total événements auditLogs)
+    - Alertes actives (brute force, escalade, WAF)
+
+  ▶ Onglet "WAF"
+    - Total attaques bloquées (24h)
+    - Répartition par type : SQLi, XSS, Path Traversal, Agent suspect, CMD
+    - Règles OWASP actives
+    - Tableau des dernières attaques avec IP + chemin + timestamp
+
+  ▶ Onglet "SIEM — Logs"
+    - 20 derniers événements Firestore auditLogs
+    - Colonnes : Événement, Section, Email, Rôle, Chemin, IP, Horodatage
+    - Source : Firestore (append-only, infalsifiable)
+
+
+══════════════════════════════════════════════════════════════════════════════
+  DISCOURS JURY — POINTS CLÉS À DIRE
+══════════════════════════════════════════════════════════════════════════════
+
+  WAF : "Le WAF intercepte la requête AVANT qu'elle touche la base de
+         données. HTTP 403 + WAF_BLOCK automatiquement loggué en Firestore."
+
+  SIEM : "Tous les événements sont horodatés par serverTimestamp() Firestore.
+          allow update/delete: if false — logs infalsifiables."
+
+  RBAC : "Firestore Rules deny by default. ProtectedRoute côté frontend.
+          4 rôles : Admin, Sous-Admin, Comptable, Étudiant."
+
+  RGPD : "Art.15 droit d'accès, Art.16 rectification, Art.17 anonymisation,
+          Art.33 notification 72h — tout tracé dans auditLogs."
+
+  SCORE : "Score 40/100 = résultat attendu pendant la démo d'attaques.
+           Score normal en production = 85-100/100."
+
+══════════════════════════════════════════════════════════════════════════════

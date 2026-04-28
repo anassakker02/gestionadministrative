@@ -1,12 +1,21 @@
 # Node modules
 node_modules/
 
-# Env files
+# Env files — NE JAMAIS committer ces fichiers
 .env
 .env.local
+.env.development
+.env.production
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Firebase credentials — CRITIQUE : ne jamais committer
+back/functions/src/config/admin.json
+back/functions/.env
+back/functions/.env.*
+service-account*.json
+*-firebase-adminsdk-*.json
 
 # Build outputs
 dist/
@@ -14,3 +23,8 @@ build/
 
 # Logs
 *.log
+npm-debug.log*
+
+# Firebase cache
+.firebase/
+firebase-debug.log

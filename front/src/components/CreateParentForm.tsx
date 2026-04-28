@@ -117,25 +117,17 @@ const CreateParentForm = () => {
     const loadStudents = async () => {
       setLoadingStudents(true);
       try {
-        console.log("🔍 Chargement des étudiants...");
         const response = await getEtudiants();
-        console.log("📊 Réponse brute:", response);
         
         // Gérer la structure de la réponse (peut être un array direct ou { data: array })
         const studentsData = Array.isArray(response) ? response : (response.data || []);
-        console.log("📋 Données des étudiants:", studentsData);
-        console.log("📊 Nombre d'étudiants:", studentsData.length);
         
         setStudents(studentsData);
         
         if (studentsData.length > 0) {
-          console.log("✅ Étudiants chargés avec succès");
-          console.log("👥 Premier étudiant:", studentsData[0]);
         } else {
-          console.warn("⚠️ Aucun étudiant trouvé");
         }
       } catch (error) {
-        console.error("❌ Erreur lors du chargement des étudiants:", error);
         setStudents([]);
       } finally {
         setLoadingStudents(false);

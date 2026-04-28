@@ -219,6 +219,7 @@ router.get("/", authenticate, usersController.getAll.bind(usersController));
 router.post("/", authenticate, usersController.create.bind(usersController));
 // ⚠️ Les routes statiques DOIVENT être avant /:id pour éviter les conflits
 router.get("/pending", authenticate, usersController.getPendingUsers.bind(usersController));
+router.get("/stats", authenticate, usersController.getStats.bind(usersController));
 router.get(
   "/available-for-student",
   authenticate,
@@ -763,5 +764,10 @@ router.delete("/:id/reject", authenticate, usersController.rejectUser.bind(users
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.put("/:id/password", authenticate, usersController.changePassword.bind(usersController));
+
+// ─── RGPD — Droit d'accès et droit à l'effacement ────────────────────────────
+const rgpdController = require("../controllers/rgpd");
+router.get("/:id/export", authenticate, rgpdController.exportUserData.bind(rgpdController));
+router.delete("/:id/data", authenticate, rgpdController.anonymizeUserData.bind(rgpdController));
 
 module.exports = router;

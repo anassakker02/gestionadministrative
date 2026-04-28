@@ -1,0 +1,185 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Fonctions utilitaires ───────────────────────────────────────────────
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getRole() {
+      return getUserData().role;
+    }
+
+    function isAdmin() {
+      return isAuth() && getRole() == 'admin';
+    }
+
+    function isSousAdmin() {
+      return isAuth() && (getRole() == 'sous-admin' || getRole() == 'admin');
+    }
+
+    function isComptable() {
+      return isAuth() && (getRole() == 'comptable' || getRole() == 'admin');
+    }
+
+    function isEnseignant() {
+      return isAuth() && getRole() == 'enseignant';
+    }
+
+    function isEtudiantOrParent() {
+      return isAuth() && (getRole() == 'etudiant' || getRole() == 'parent');
+    }
+
+    function isStaff() {
+      return isAuth() && getRole() in ['admin', 'sous-admin', 'comptable', 'enseignant'];
+    }
+
+    // ─── Collection users ─────────────────────────────────────────────────────
+    match /users/{uid} {
+      // Lecture : soi-même ou staff
+      allow read: if isAuth() && (isOwner(uid) || isStaff());
+
+      // Création : seulement via admin (les inscriptions passent par le backend)
+      allow create: if isAdmin();
+
+      // Mise à jour : soi-même (champs limités) ou admin
+      allow update: if isAuth() && isOwner(uid)
+                    && !request.resource.data.diff(resource.data)
+                        .affectedKeys().hasAny(['role', 'isActive', 'status']);
+      allow update: if isAdmin();
+
+      // Suppression : admin uniquement
+      allow delete: if isAdmin();
+    }
+
+    // ─── Collection etudiants ─────────────────────────────────────────────────
+    match /etudiants/{etudiantId} {
+      allow read: if isStaff()
+                  || (isAuth() && getRole() == 'etudiant'
+                      && resource.data.userId == request.auth.uid)
+                  || (isAuth() && getRole() == 'parent'
+                      && resource.data.parentId == request.auth.uid);
+      allow create, update: if isSousAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Collection paiements ─────────────────────────────────────────────────
+    match /paiements/{paiementId} {
+      allow read: if isStaff()
+                  || (isEtudiantOrParent()
+                      && resource.data.etudiant_id != null);
+      allow create: if isComptable();
+      allow update: if isComptable();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Collection factures ──────────────────────────────────────────────────
+    match /factures/{factureId} {
+      allow read: if isStaff()
+                  || (isEtudiantOrParent()
+                      && resource.data.etudiant_id != null);
+      allow create: if isComptable();
+      allow update: if isComptable();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Collection echeanciers ───────────────────────────────────────────────
+    match /echeanciers/{echeancierId} {
+      allow read: if isStaff() || isEtudiantOrParent();
+      allow create, update: if isComptable();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Collection classes ───────────────────────────────────────────────────
+    match /classes/{classeId} {
+      allow read: if isAuth();
+      allow create, update: if isSousAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Collection tarifs ────────────────────────────────────────────────────
+    match /tarifs/{tarifId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ─── Collection bourses ───────────────────────────────────────────────────
+    match /bourses/{bourseId} {
+      allow read: if isStaff() || isEtudiantOrParent();
+      allow create, update: if isComptable();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Collection fraisPonctuels ────────────────────────────────────────────
+    match /fraisPonctuels/{fraisId} {
+      allow read: if isStaff() || isEtudiantOrParent();
+      allow create, update: if isComptable();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Collection enseignants ───────────────────────────────────────────────
+    match /enseignants/{enseignantId} {
+      allow read: if isAuth();
+      allow create, update: if isSousAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Collection parents ───────────────────────────────────────────────────
+    match /parents/{parentId} {
+      allow read: if isStaff()
+                  || (isAuth() && isOwner(parentId));
+      allow create, update: if isSousAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Collection matieres ──────────────────────────────────────────────────
+    match /matieres/{matiereId} {
+      allow read: if isAuth();
+      allow create, update: if isSousAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Collection logs (audit) — append-only ────────────────────────────────
+    match /logs/{logId} {
+      // Création autorisée pour tout utilisateur authentifié (log de ses propres actions)
+      allow create: if isAuth()
+                    && request.resource.data.userId == request.auth.uid;
+      // Lecture réservée aux admins
+      allow read: if isAdmin();
+      // Aucune modification ni suppression — immuable
+      allow update, delete: if false;
+    }
+
+    // ─── Collection auditLogs ─────────────────────────────────────────────────
+    match /auditLogs/{logId} {
+      allow create: if isAuth();
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // ─── Collection webhookSubscriptions ─────────────────────────────────────
+    match /webhookSubscriptions/{subId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── Collection backupHistory ─────────────────────────────────────────────
+    match /backupHistory/{backupId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── Deny-by-default : tout le reste est refusé ───────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

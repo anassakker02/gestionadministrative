@@ -86,7 +86,7 @@ class PaiementController {
       } catch (e) {
         console.warn(
           "Tarifs lookup failed, fallback to defaults 56000/800",
-          e?.message
+          e?.message,
         );
       }
       if (!tuitionAmount) tuitionAmount = 56000;
@@ -132,14 +132,14 @@ class PaiementController {
       const montant_payee = Number(montantPaye);
       const montant_restant = Math.max(
         0,
-        montant_du - (totalAlreadyPaid + montant_payee)
+        montant_du - (totalAlreadyPaid + montant_payee),
       );
 
       let paiementResult = {};
       if (methode === "paypal") {
         const env = new paypal.core.SandboxEnvironment(
           process.env.PAYPAL_CLIENT_ID,
-          process.env.PAYPAL_CLIENT_SECRET
+          process.env.PAYPAL_CLIENT_SECRET,
         );
         const client = new paypal.core.PayPalHttpClient(env);
         const request = new paypal.orders.OrdersCreateRequest();
@@ -216,7 +216,7 @@ class PaiementController {
       } else {
         console.error(
           "Facture auto-generation failed:",
-          factureGenerationResult.message
+          factureGenerationResult.message,
         );
         // Handle error or fallback if invoice generation fails
       }
@@ -268,10 +268,18 @@ class PaiementController {
       // Supporter etudiant_id (clé actuelle en base) et student_id (alias documenté)
       const etuFromQuery = req.query.etudiant_id || req.query.student_id;
       const { status } = req.query;
+
+      const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+      const page = parseInt(req.query.page) || 1;
+      const offset = (page - 1) * limit;
+
       console.log("PaiementController: getAll - Query parameters:", {
         etudiant_id: etuFromQuery,
         status,
+        limit,
+        page,
       });
+
       let query = this.collection;
       if (etuFromQuery) {
         query = query.where("etudiant_id", "==", etuFromQuery);
@@ -279,42 +287,84 @@ class PaiementController {
       if (status) {
         query = query.where("status", "==", status);
       }
-      // Récupérer sans orderBy (évite les index composites manquants), trier en mémoire
-      const snapshot = await query.get();
-      let paiements = snapshot.docs.map((doc) => ({
+
+      // Try to use server-side ordering if index exists, fallback to memory if it fails
+      let snapshot;
+      let total = 0;
+      try {
+        const countSnap = await query.count().get();
+        total = countSnap.data().count;
+
+        let orderedQuery = query.orderBy("createdAt", "desc");
+        snapshot = await orderedQuery.limit(limit + offset).get();
+      } catch (e) {
+        console.warn(
+          "Server-side sorting failed in getAll paiements, falling back to memory sort:",
+          e.message,
+        );
+        snapshot = await query.limit(limit + offset).get();
+        // total count might still work
+        if (total === 0) {
+          const countSnap = await query.count().get();
+          total = countSnap.data().count;
+        }
+      }
+
+      let docs = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-      // Tri en mémoire par createdAt desc
-      paiements.sort((a, b) => {
+
+      // If we couldn't use server-side order, we sort in memory
+      // Note: This is still limited by the fetch, so it's safer
+      docs.sort((a, b) => {
         const aDate = a.createdAt?.toMillis?.() || 0;
         const bDate = b.createdAt?.toMillis?.() || 0;
         return bDate - aDate;
       });
-      console.log(
-        `PaiementController: getAll - fetched ${paiements.length} paiements (by etudiant_id)`
-      );
 
-      // Fallback: si on filtre par étudiant et aucun résultat, tenter qui_a_paye
-      if (etuFromQuery && paiements.length === 0) {
+      const paginatedDocs = docs.slice(offset, offset + limit);
+
+      // Fallback logic for qui_a_paye if etudiant_id filter produced nothing
+      if (etuFromQuery && paginatedDocs.length === 0 && page === 1) {
         let q2 = this.collection.where("qui_a_paye", "==", etuFromQuery);
         if (status) q2 = q2.where("status", "==", status);
-        const snap2 = await q2.get();
+
+        const countSnap2 = await q2.count().get();
+        const total2 = countSnap2.data().count;
+
+        const snap2 = await q2
+          .orderBy("createdAt", "desc")
+          .limit(limit)
+          .get()
+          .catch(() => q2.limit(limit).get());
         const alt = snap2.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
         if (alt.length > 0) {
-          console.log(
-            `PaiementController: getAll - fallback qui_a_paye returned ${alt.length}`
-          );
           alt.sort((a, b) => {
             const aDate = a.createdAt?.toMillis?.() || 0;
             const bDate = b.createdAt?.toMillis?.() || 0;
             return bDate - aDate;
           });
-          paiements = alt;
+          return res
+            .status(200)
+            .json({
+              status: true,
+              data: alt,
+              pagination: { total: total2, limit, page },
+            });
         }
       }
-      return res.status(200).json({ status: true, data: paiements });
+
+      return res
+        .status(200)
+        .json({
+          status: true,
+          data: paginatedDocs,
+          pagination: { total, limit, page },
+        });
     } catch (error) {
+      console.error("Erreur getAll paiements:", error);
       return res.status(500).json({
         status: false,
         message: "Erreur récupération paiements",
@@ -481,7 +531,7 @@ class PaiementController {
                   if (pr > 0) {
                     const tuitionAfter = Math.max(
                       0,
-                      tuitionAmount * (1 - pr / 100)
+                      tuitionAmount * (1 - pr / 100),
                     );
                     totalCap = tuitionAfter + otherFeesAmount;
                   }
@@ -511,7 +561,7 @@ class PaiementController {
       } catch (e) {
         console.warn(
           "Paiement update: recalcul des montants échoué:",
-          e?.message
+          e?.message,
         );
       }
 

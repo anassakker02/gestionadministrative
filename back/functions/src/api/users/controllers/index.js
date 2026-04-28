@@ -34,6 +34,10 @@ class UsersController {
       }
 
       const { status, role } = req.query;
+      const hasLimit = req.query.limit !== undefined;
+      const limit = hasLimit
+        ? Math.min(parseInt(req.query.limit, 10) || 200, 500)
+        : null;
       let query = this.collection;
 
       if (status) {
@@ -43,7 +47,7 @@ class UsersController {
         query = query.where("role", "==", role);
       }
 
-      const snapshot = await query.get();
+      const snapshot = limit ? await query.limit(limit).get() : await query.get();
       const users = snapshot.docs.map((doc) => {
         const userData = doc.data();
         if (userData.telephone)
@@ -53,11 +57,76 @@ class UsersController {
         delete userData.password;
         return { id: doc.id, ...userData };
       });
-      return res.status(200).json({ status: true, data: users });
+      return res.status(200).json({
+        status: true,
+        data: users,
+        pagination: limit
+          ? {
+              limit,
+              count: users.length,
+              hasMore: users.length === limit,
+            }
+          : undefined,
+      });
     } catch (error) {
       return res.status(500).json({
         status: false,
         message: "Erreur lors de la récupération des utilisateurs",
+        error: error.message,
+      });
+    }
+  }
+
+  // Récupérer les statistiques utilisateurs (agrégations rapides)
+  async getStats(req, res) {
+    try {
+      if (
+        !req.user ||
+        !["admin", "sous-admin", "comptable"].includes(req.user.role)
+      ) {
+        return res.status(403).json({
+          message: "Non autorisé à voir les statistiques utilisateurs",
+          status: false,
+        });
+      }
+
+      const [
+        totalSnap,
+        activeSnap,
+        adminSnap,
+        subAdminSnap,
+        enseignantSnap,
+        parentSnap,
+        etudiantSnap,
+      ] = await Promise.all([
+        this.collection.count().get(),
+        this.collection.where("isActive", "==", true).count().get(),
+        this.collection.where("role", "==", "admin").count().get(),
+        this.collection.where("role", "==", "sous-admin").count().get(),
+        this.collection.where("role", "==", "enseignant").count().get(),
+        this.collection.where("role", "==", "parent").count().get(),
+        this.collection
+          .where("role", "in", ["etudiant", "student"])
+          .count()
+          .get(),
+      ]);
+
+      return res.status(200).json({
+        status: true,
+        data: {
+          totalUsers: totalSnap.data().count || 0,
+          actifs: activeSnap.data().count || 0,
+          admins: adminSnap.data().count || 0,
+          subAdmins: subAdminSnap.data().count || 0,
+          enseignants: enseignantSnap.data().count || 0,
+          parents: parentSnap.data().count || 0,
+          etudiants: etudiantSnap.data().count || 0,
+        },
+      });
+    } catch (error) {
+      return res.status(500).json({
+        status: false,
+        message: "Erreur lors de la récupération des statistiques utilisateurs",
         error: error.message,
       });
     }

@@ -40,10 +40,8 @@
  */
 
 const router = require('express').Router();
-const UploadController = require('../controllers');
-const multer = require('multer');
-
-const upload = multer({ storage: multer.memoryStorage() });
+// On importe le controller ET l'instance multer sécurisée (avec whitelist MIME)
+const { controller: UploadController, upload } = require('../controllers');
 
 /**
  * @swagger
@@ -84,6 +82,9 @@ const upload = multer({ storage: multer.memoryStorage() });
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/single', upload.single('file'), UploadController.uploadSingleFile.bind(UploadController));
+router.post('/single', upload.single('file'), (req, res, next) => {
+  // Gestion de l'erreur Multer (taille ou MIME)
+  UploadController.uploadSingleFile(req, res, next);
+});
 
 module.exports = router;

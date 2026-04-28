@@ -64,6 +64,7 @@ const UserManagement = () => {
       if (filterRole !== "all") {
         params.role = filterRole;
       }
+      params.limit = 200;
       // Both admins and sous-admins can call the same API; we will filter visibility client-side for sous-admin
       if (isAdmin || isSubAdmin) {
         return userService.getAllUsers(params);
@@ -76,7 +77,6 @@ const UserManagement = () => {
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
       const response = await userService.updateProfile(id, { isActive });
-      console.log("Réponse API statut:", response);
       return response;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["all-users"] }),

@@ -3,25 +3,16 @@ const db = require("../config/firebase");
 
 const authenticate = async (req, res, next) => {
   const authHeader = req.header("Authorization");
-  console.log("[AUTH MIDDLEWARE] Authorization header:", authHeader);
   const token = authHeader?.replace("Bearer ", "");
 
   if (!token) {
-    console.warn("[AUTH MIDDLEWARE] No token provided");
     return res
       .status(401)
       .json({ status: false, message: "Accès refusé. Aucun token fourni." });
   }
 
   try {
-    console.log(
-      "[AUTH MIDDLEWARE] Backend JWT_SECRET (trimmed):",
-      typeof process.env.JWT_SECRET === "string"
-        ? process.env.JWT_SECRET.substr(0, 10) + "..."
-        : process.env.JWT_SECRET
-    );
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("[AUTH MIDDLEWARE] Token verified, payload:", decoded);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
     
     // Vérifier le statut actif de l'utilisateur
     const userDoc = await db.collection("users").doc(decoded.id).get();

@@ -123,7 +123,7 @@ class FactureController {
       const somme =
         itemsClean.reduce(
           (acc, it) => acc + Number(it.total || it.montant || 0),
-          0
+          0,
         ) || totalTarif;
       const newFacture = {
         student_id,
@@ -167,19 +167,31 @@ class FactureController {
           if (isNaN(dueDate.getTime())) dueDate = null;
         } else {
           // If no specific due date, try to calculate from payment plan
-          const planDoc = await this.paymentPlansCollection.doc(paymentPlanId).get();
+          const planDoc = await this.paymentPlansCollection
+            .doc(paymentPlanId)
+            .get();
           if (planDoc.exists) {
             const paymentPlanData = planDoc.data();
             // For simplicity, let's assume the first installment's due date is used for the invoice
             // Or, for a full annual invoice, the last installment's due date.
             // For now, we'll take the latest installment due date as the invoice due date.
-            if (Array.isArray(paymentPlanData.installments) && paymentPlanData.installments.length > 0) {
-              const latestInstallment = paymentPlanData.installments.reduce((latest, current) => {
-                return (current.dueDateOffsetMonths > latest.dueDateOffsetMonths) ? current : latest;
-              });
+            if (
+              Array.isArray(paymentPlanData.installments) &&
+              paymentPlanData.installments.length > 0
+            ) {
+              const latestInstallment = paymentPlanData.installments.reduce(
+                (latest, current) => {
+                  return current.dueDateOffsetMonths >
+                    latest.dueDateOffsetMonths
+                    ? current
+                    : latest;
+                },
+              );
               const emissionDate = new Date(newFacture.date_emission);
               dueDate = new Date(emissionDate);
-              dueDate.setMonth(emissionDate.getMonth() + latestInstallment.dueDateOffsetMonths);
+              dueDate.setMonth(
+                emissionDate.getMonth() + latestInstallment.dueDateOffsetMonths,
+              );
             }
           }
         }
@@ -319,30 +331,42 @@ class FactureController {
       ];
 
       let currentInstallmentAmount = totalTarif;
-      let currentInstallmentDescription = description || "Frais de scolarité annuel";
+      let currentInstallmentDescription =
+        description || "Frais de scolarité annuel";
       let dueDate = null;
       let paymentPlanId = studentData.paymentPlanId || null;
 
-      if (paymentPlanId && typeof installmentIndex === 'number') {
-        const planDoc = await this.paymentPlansCollection.doc(paymentPlanId).get();
+      if (paymentPlanId && typeof installmentIndex === "number") {
+        const planDoc = await this.paymentPlansCollection
+          .doc(paymentPlanId)
+          .get();
         if (planDoc.exists) {
           const paymentPlanData = planDoc.data();
-          if (Array.isArray(paymentPlanData.installments) && paymentPlanData.installments[installmentIndex]) {
+          if (
+            Array.isArray(paymentPlanData.installments) &&
+            paymentPlanData.installments[installmentIndex]
+          ) {
             const installment = paymentPlanData.installments[installmentIndex];
-            currentInstallmentAmount = totalTarif * (installment.percentage / 100);
-            currentInstallmentDescription = installment.description || currentInstallmentDescription;
+            currentInstallmentAmount =
+              totalTarif * (installment.percentage / 100);
+            currentInstallmentDescription =
+              installment.description || currentInstallmentDescription;
 
             const academicYearStart = new Date(`${anneeScolaireCurrent}-10-01`); // Assuming academic year starts in October
             dueDate = new Date(academicYearStart);
-            dueDate.setMonth(academicYearStart.getMonth() + installment.dueDateOffsetMonths);
+            dueDate.setMonth(
+              academicYearStart.getMonth() + installment.dueDateOffsetMonths,
+            );
 
             // Adjust factureItems to reflect only this installment's amount
-            factureItems = [{
-              description: currentInstallmentDescription,
-              quantity: 1,
-              unitPrice: currentInstallmentAmount,
-              total: currentInstallmentAmount,
-            }];
+            factureItems = [
+              {
+                description: currentInstallmentDescription,
+                quantity: 1,
+                unitPrice: currentInstallmentAmount,
+                total: currentInstallmentAmount,
+              },
+            ];
           }
         }
       }
@@ -414,13 +438,50 @@ class FactureController {
         req.params.student_id = sid;
         return this.getByStudent(req, res);
       }
-      const snapshot = await this.collection.get();
+
+      const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+      const page = parseInt(req.query.page) || 1;
+      const offset = (page - 1) * limit;
+
+      let query = this.collection.orderBy("createdAt", "desc");
+
+      // Get total count (optional but helpful for frontend pagination)
+      const countSnapshot = await this.collection.count().get();
+      const total = countSnapshot.data().count;
+
+      if (offset > 0) {
+        // Note: For real production with large datasets, startAfter is better than offset
+        // but for now, we'll use a simple approach or just limit.
+        // Firestore doesn't have a built-in offset(n), so we simulate or use limit.
+        const snapshot = await query.limit(limit + offset).get();
+        const docs = snapshot.docs.slice(offset);
+        const factures = docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        return res
+          .status(200)
+          .json({
+            status: true,
+            data: factures,
+            pagination: { total, limit, page },
+          });
+      }
+
+      const snapshot = await query.limit(limit).get();
       const factures = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-      return res.status(200).json({ status: true, data: factures });
+      return res
+        .status(200)
+        .json({
+          status: true,
+          data: factures,
+          pagination: { total, limit, page },
+        });
     } catch (error) {
+      console.error("Erreur getAll factures:", error);
       return res.status(500).json({ status: false, message: "Erreur serveur" });
     }
   }
@@ -442,16 +503,49 @@ class FactureController {
           .status(400)
           .json({ status: false, message: "student_id requis" });
       }
+
+      const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+      const page = parseInt(req.query.page) || 1;
+      const offset = (page - 1) * limit;
+
       let query = this.collection.where("student_id", "==", student_id);
       if (status) {
         query = query.where("statut", "==", status);
       }
-      const snapshot = await query.get();
+
+      query = query.orderBy("createdAt", "desc");
+
+      const countSnapshot = await query.count().get();
+      const total = countSnapshot.data().count;
+
+      if (offset > 0) {
+        const snapshot = await query.limit(limit + offset).get();
+        const docs = snapshot.docs.slice(offset);
+        const factures = docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        return res
+          .status(200)
+          .json({
+            status: true,
+            data: factures,
+            pagination: { total, limit, page },
+          });
+      }
+
+      const snapshot = await query.limit(limit).get();
       const factures = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-      return res.status(200).json({ status: true, data: factures });
+      return res
+        .status(200)
+        .json({
+          status: true,
+          data: factures,
+          pagination: { total, limit, page },
+        });
     } catch (error) {
       console.error("Erreur getByStudent:", error);
       return res.status(500).json({ status: false, message: "Erreur serveur" });
@@ -553,7 +647,7 @@ class FactureController {
         updateData.items = Array.isArray(items) ? items : [];
         updateData.somme = (updateData.items || []).reduce(
           (acc, it) => acc + Number(it.total || it.montant || 0),
-          0
+          0,
         );
       }
       if (req.body.somme !== undefined)
@@ -569,7 +663,7 @@ class FactureController {
         if (isNaN(dueDate.getTime())) {
           return res.status(400).json({
             status: false,
-            message: "Format de date d'échéance invalide."
+            message: "Format de date d'échéance invalide.",
           });
         }
         updateData.date_echeance = dueDate.toISOString();
@@ -1056,7 +1150,7 @@ class FactureController {
       let enregistreParName = "N/A";
       if (factureData.paiement_info?.enregistre_par) {
         enregistreParName = await getUserNameById(
-          factureData.paiement_info.enregistre_par
+          factureData.paiement_info.enregistre_par,
         );
       }
 
@@ -1068,13 +1162,13 @@ class FactureController {
       const paymentHistory = Array.isArray(factureData.paymentHistory)
         ? factureData.paymentHistory
         : Array.isArray(factureData.historique_paiements)
-        ? factureData.historique_paiements.map((p) => ({
-            methode: p.mode_paiement || p.methode,
-            date: p.date_paiement || p.date,
-            enregistre_par: p.enregistre_par,
-            montant: p.montant || p.montant_paye,
-          }))
-        : [];
+          ? factureData.historique_paiements.map((p) => ({
+              methode: p.mode_paiement || p.methode,
+              date: p.date_paiement || p.date,
+              enregistre_par: p.enregistre_par,
+              montant: p.montant || p.montant_paye,
+            }))
+          : [];
 
       const paiementInfo = factureData.paiement_info || null;
 
@@ -1088,7 +1182,7 @@ class FactureController {
             <td class="num">${item.quantity || 0}</td>
             <td class="num">${fmt(item.unitPrice, currency)}</td>
             <td class="num">${fmt(item.total, currency)}</td>
-          </tr>`
+          </tr>`,
         )
         .join("");
 
@@ -1112,11 +1206,11 @@ class FactureController {
               <tr>
                 <td>${ph.methode || "—"}</td>
                 <td>${(toDateSafe(ph.date) || new Date()).toLocaleDateString(
-                  "fr-FR"
+                  "fr-FR",
                 )}</td>
                 <td>${ph.enregistre_par || "—"}</td>
                 <td class="num">${fmt(ph.montant, currency)}</td>
-              </tr>`
+              </tr>`,
               )
               .join("")}
           </tbody>
@@ -1129,7 +1223,7 @@ class FactureController {
         <div class="grid">
           <div><strong>Montant payé:</strong> ${fmt(
             paiementInfo.montant_paye,
-            currency
+            currency,
           )}</div>
           <div><strong>Type de paiement:</strong> ${
             paiementInfo.mode_paiement || paiementInfo.methode || "—"
@@ -1142,11 +1236,11 @@ class FactureController {
           ).toLocaleDateString("fr-FR")}</div>
           <div><strong>Total des paiements effectués:</strong> ${fmt(
             factureData.montantPaye,
-            currency
+            currency,
           )}</div>
           <div><strong>Reste global:</strong> ${fmt(
             factureData.montantRestant,
-            currency
+            currency,
           )}</div>
           <div><strong>Enregistré par:</strong> ${enregistreParName}</div>
           <div><strong>Imprimé par:</strong> ${printedByName}</div>
@@ -1205,15 +1299,15 @@ class FactureController {
               <div class="total-box">
                 <div><strong>Montant total (Année):</strong> ${fmt(
                   factureData.montant_total,
-                  currency
+                  currency,
                 )}</div>
                 <div><strong>Payé (Année):</strong> ${fmt(
                   factureData.montantPaye,
-                  currency
+                  currency,
                 )}</div>
                 <div><strong>Restant (Année):</strong> ${fmt(
                   factureData.montantRestant,
-                  currency
+                  currency,
                 )}</div>
                 <div><strong>Statut:</strong> ${factureData.statut}</div>
               </div>
@@ -1244,7 +1338,7 @@ class FactureController {
         const { filePath, downloadUrl } =
           await require("../../../utils/pdfGenerator").generatePdf(
             htmlContent,
-            fileName
+            fileName,
           );
 
         // Record export history
@@ -1269,7 +1363,7 @@ class FactureController {
       } catch (uploadErr) {
         console.error(
           "Error uploading PDF to Firebase Storage, falling back to data URL:",
-          uploadErr
+          uploadErr,
         );
         // Fallback: generate PDF buffer and return data URL to avoid storage dependency
         const pdfLib = require("html-pdf");
@@ -1277,7 +1371,7 @@ class FactureController {
           pdfLib.create(htmlContent, {}).toBuffer((err, buffer) => {
             if (err) return reject(err);
             const dataUrl = `data:application/pdf;base64,${buffer.toString(
-              "base64"
+              "base64",
             )}`;
             return res.status(200).json({
               status: true,
@@ -1379,7 +1473,7 @@ class FactureController {
       } catch (e) {
         console.warn(
           "Tarifs lookup (generateAfterPayment) failed:",
-          e?.message
+          e?.message,
         );
       }
       if (!tuitionAmount) tuitionAmount = 56000;
@@ -1399,7 +1493,7 @@ class FactureController {
       } catch (e) {
         console.warn(
           "Bourse lookup (generateAfterPayment) failed:",
-          e?.message
+          e?.message,
         );
       }
 
@@ -1452,7 +1546,7 @@ class FactureController {
       } catch (e) {
         console.warn(
           "Somme paiements (generateAfterPayment) failed:",
-          e?.message
+          e?.message,
         );
       }
       // Cumul après ce paiement: inclut le montant courant explicitement pour éviter le cas où la requête n'a pas encore indexé ce paiement
@@ -1675,7 +1769,7 @@ class FactureController {
       const nouveauMontantPaye = (factureData.montantPaye || 0) + montant_paye;
       const nouveauMontantRestant = Math.max(
         0,
-        factureData.montant_total - nouveauMontantPaye
+        factureData.montant_total - nouveauMontantPaye,
       );
 
       // Déterminer le nouveau statut

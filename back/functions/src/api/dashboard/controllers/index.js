@@ -11,39 +11,45 @@ const admin = require("firebase-admin");
 class DashboardController {
   async getDashboardStats(req, res) {
     try {
-      const studentsSnapshot = await db.collection("etudiants").get();
-      const totalStudents = studentsSnapshot.docs.length;
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-      const paymentsSnapshot = await db.collection("paiements").get();
-      let totalPayments = 0;
-      let monthlyRevenue = 0;
-      paymentsSnapshot.docs.forEach((doc) => {
-        const payment = doc.data();
-        totalPayments += payment.montantPaye || 0;
-        const paymentDate =
-          payment.date_paiement instanceof Date
-            ? payment.date_paiement
-            : payment.date_paiement?.toDate();
-        if (
-          paymentDate &&
-          paymentDate.getMonth() === new Date().getMonth() &&
-          paymentDate.getFullYear() === new Date().getFullYear()
-        ) {
-          monthlyRevenue += payment.montantPaye || 0;
-        }
-      });
+      const [
+        studentsCountSnap,
+        totalInvoicesSnap,
+        totalPaymentsSnap,
+        monthlyPaymentsSnap,
+        unpaidInvoicesSnap,
+      ] = await Promise.all([
+        db.collection("etudiants").count().get(),
+        db.collection("factures").count().get(),
+        db.collection("paiements").select("montantPaye").get(),
+        db
+          .collection("paiements")
+          .where("createdAt", ">=", monthStart)
+          .where("createdAt", "<", nextMonthStart)
+          .select("montantPaye")
+          .get(),
+        db
+          .collection("factures")
+          .where("statut", "in", ["impayée", "partielle"])
+          .select("montantRestant")
+          .get(),
+      ]);
 
-      const invoicesSnapshot = await db.collection("factures").get();
-      let totalInvoices = invoicesSnapshot.docs.length;
-      let unpaidInvoices = 0;
-      let pendingPaymentsAmount = 0;
-      invoicesSnapshot.docs.forEach((doc) => {
-        const invoice = doc.data();
-        if (invoice.statut === "impayée" || invoice.statut === "partielle") {
-          unpaidInvoices++;
-          pendingPaymentsAmount += invoice.montantRestant || 0;
-        }
-      });
+      const totalStudents = studentsCountSnap.data().count || 0;
+      const totalInvoices = totalInvoicesSnap.data().count || 0;
+      const totalPayments = totalPaymentsSnap.docs.reduce((sum, doc) => {
+        return sum + (Number(doc.data()?.montantPaye) || 0);
+      }, 0);
+      const monthlyRevenue = monthlyPaymentsSnap.docs.reduce((sum, doc) => {
+        return sum + (Number(doc.data()?.montantPaye) || 0);
+      }, 0);
+      const unpaidInvoices = unpaidInvoicesSnap.docs.length;
+      const pendingPaymentsAmount = unpaidInvoicesSnap.docs.reduce((sum, doc) => {
+        return sum + (Number(doc.data()?.montantRestant) || 0);
+      }, 0);
 
       let recentActivities = [];
       try {
@@ -64,13 +70,9 @@ class DashboardController {
           };
         });
       } catch (logError) {
-        console.warn("⚠️ Fallback auditLogs pour Dashboard:", logError.message);
+        console.warn("Fallback auditLogs pour Dashboard:", logError.message);
         try {
-          // Fallback sans orderBy
-          const auditLogsSnapshot = await db
-            .collection("auditLogs")
-            .limit(4)
-            .get();
+          const auditLogsSnapshot = await db.collection("auditLogs").limit(4).get();
           recentActivities = auditLogsSnapshot.docs.map((doc) => {
             const log = doc.data();
             const timestamp = log.timestamp?.toDate
@@ -83,7 +85,7 @@ class DashboardController {
             };
           });
         } catch (innerError) {
-          console.error("❌ Échec total auditLogs:", innerError);
+          console.error("Echec total auditLogs:", innerError);
           recentActivities = [];
         }
       }
@@ -97,7 +99,7 @@ class DashboardController {
           totalPayments: `€${totalPayments.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
           totalInvoices: totalInvoices.toLocaleString(),
         },
-        recentActivities: recentActivities,
+        recentActivities,
       };
 
       try {
@@ -111,7 +113,7 @@ class DashboardController {
         await auditLog.save();
       } catch (saveError) {
         console.warn(
-          "⚠️ Impossible de sauvegarder l'audit log du dashboard:",
+          "Impossible de sauvegarder l'audit log du dashboard:",
           saveError.message,
         );
       }
@@ -122,13 +124,10 @@ class DashboardController {
         "Erreur lors de la récupération des statistiques du tableau de bord:",
         error,
       );
-      res
-        .status(500)
-        .json({
-          message:
-            "Erreur lors de la récupération des statistiques du tableau de bord",
-          error: error.message,
-        });
+      res.status(500).json({
+        message: "Erreur lors de la récupération des statistiques du tableau de bord",
+        error: error.message,
+      });
     }
   }
 
@@ -145,26 +144,26 @@ class DashboardController {
           .status(404)
           .json({
             status: false,
-            message: "Aucun étudiant trouvé pour l'exportation.",
+            message: "Aucun Ã©tudiant trouvÃ© pour l'exportation.",
           });
       }
 
       const headers = [
         { id: "id", title: "ID" },
         { id: "nom", title: "Nom" },
-        { id: "prenom", title: "Prénom" },
+        { id: "prenom", title: "PrÃ©nom" },
         { id: "dateNaissance", title: "Date de Naissance" },
         { id: "genre", title: "Genre" },
-        { id: "nationalite", title: "Nationalité" },
+        { id: "nationalite", title: "NationalitÃ©" },
         { id: "adresse", title: "Adresse" },
-        { id: "telephone", title: "Téléphone" },
+        { id: "telephone", title: "TÃ©lÃ©phone" },
         { id: "email", title: "Email" },
         { id: "classe_id", title: "ID Classe" },
-        { id: "anneeScolaire", title: "Année Scolaire" },
+        { id: "anneeScolaire", title: "AnnÃ©e Scolaire" },
         { id: "parentId", title: "ID Parent" },
         { id: "exemptions", title: "Exemptions" },
-        { id: "createdAt", title: "Date de Création" },
-        { id: "updatedAt", title: "Date de Mise à Jour" },
+        { id: "createdAt", title: "Date de CrÃ©ation" },
+        { id: "updatedAt", title: "Date de Mise Ã  Jour" },
       ];
 
       const formattedStudents = students.map((student) => ({
@@ -221,12 +220,12 @@ class DashboardController {
           downloadUrl: downloadUrl,
         });
     } catch (error) {
-      console.error("Erreur lors de l'exportation CSV des étudiants:", error);
+      console.error("Erreur lors de l'exportation CSV des Ã©tudiants:", error);
       res
         .status(500)
         .json({
           status: false,
-          message: "Erreur lors de l'exportation CSV des étudiants",
+          message: "Erreur lors de l'exportation CSV des Ã©tudiants",
           error: error.message,
         });
     }
@@ -240,7 +239,7 @@ class DashboardController {
       if (students.length === 0) {
         return res
           .status(404)
-          .json({ status: false, message: "Aucun étudiant trouvé à exporter" });
+          .json({ status: false, message: "Aucun Ã©tudiant trouvÃ© Ã  exporter" });
       }
 
       const headers = [
@@ -313,7 +312,7 @@ class DashboardController {
         .status(500)
         .json({
           status: false,
-          message: "Erreur lors de l'exportation Excel des étudiants",
+          message: "Erreur lors de l'exportation Excel des Ã©tudiants",
           error: error.message,
         });
     }
@@ -336,7 +335,7 @@ class DashboardController {
         .status(500)
         .json({
           status: false,
-          message: "Erreur lors de la récupération de l'historique des exports",
+          message: "Erreur lors de la rÃ©cupÃ©ration de l'historique des exports",
           error: error.message,
         });
     }
@@ -355,7 +354,7 @@ class DashboardController {
       if (!exportDoc.exists) {
         return res
           .status(404)
-          .json({ status: false, message: "Exportation non trouvée" });
+          .json({ status: false, message: "Exportation non trouvÃ©e" });
       }
 
       const exportData = exportDoc.data();
@@ -365,7 +364,7 @@ class DashboardController {
           .status(404)
           .json({
             status: false,
-            message: "Chemin du fichier d'exportation non trouvé",
+            message: "Chemin du fichier d'exportation non trouvÃ©",
           });
       }
 
@@ -381,7 +380,7 @@ class DashboardController {
         .status(200)
         .json({
           status: true,
-          message: "Lien de téléchargement généré avec succès",
+          message: "Lien de tÃ©lÃ©chargement gÃ©nÃ©rÃ© avec succÃ¨s",
           downloadUrl: url,
         });
     } catch (error) {
@@ -390,7 +389,7 @@ class DashboardController {
         .status(500)
         .json({
           status: false,
-          message: "Erreur lors du téléchargement de l'exportation",
+          message: "Erreur lors du tÃ©lÃ©chargement de l'exportation",
           error: error.message,
         });
     }
@@ -398,3 +397,4 @@ class DashboardController {
 }
 
 module.exports = new DashboardController();
+

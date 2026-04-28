@@ -55,7 +55,6 @@ export const getAllPaiements = async (
   const url = queryString ? `/paiements?${queryString}` : "/paiements";
   if (queryString) {
     // Debug léger pour vérifier le filtrage
-    console.debug("getAllPaiements →", url);
   }
   
   // Utiliser l'API backend réelle au lieu des données mockées
@@ -67,7 +66,6 @@ export const getAllPaiements = async (
   try {
     const keys =
       res && typeof res === "object" ? Object.keys(res as object) : [];
-    console.debug("getAllPaiements ← raw shape keys:", keys);
     // Déterminer le statut si présent
     if (
       res &&
@@ -94,16 +92,10 @@ export const getAllPaiements = async (
       }
     }
   } catch (e) {
-    console.warn("getAllPaiements ← normalisation échouée:", e);
   }
-  console.debug(
-    "getAllPaiements ← normalized length:",
-    Array.isArray(data) ? data.length : -1
-  );
   // Add logging for payment object keys
   if (Array.isArray(data)) {
     data.forEach((payment, index) => {
-      console.debug(`Paiement ${index} keys:`, Object.keys(payment));
     });
   }
   return { status: statusFlag ?? true, data } as {

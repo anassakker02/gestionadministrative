@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { logAccessDenied } from '@/services/logService';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -35,15 +36,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Vérifier les rôles si spécifiés
   if (roles && !hasRole(roles)) {
-    // Redirection intelligente basée sur le rôle de l'utilisateur
-    const userRole = user.role;
-    let redirectPath = '/dashboard';
-    
-    if (userRole === 'etudiant' || userRole === 'parent') {
-      redirectPath = '/portal';
-    }
-    
-    return <Navigate to={redirectPath} replace />;
+    logAccessDenied(location.pathname, user.role);
+    return <Navigate to="/unauthorized" replace />;
   }
 
   return <>{children}</>;

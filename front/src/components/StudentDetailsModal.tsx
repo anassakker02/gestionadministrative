@@ -181,7 +181,6 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({
 
       onClose();
     } catch (err) {
-      console.error("Erreur génération facture:", err);
       window.alert(
         "Échec de la génération de la facture. Veuillez réessayer ou vérifier le serveur."
       );

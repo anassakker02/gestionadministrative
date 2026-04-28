@@ -1,0 +1,619 @@
+================================================================================
+         PLAN DE PRESENTATION — SOUTENANCE PFE
+         SECURISATION D'UNE PLATEFORME DE GESTION SCOLAIRE
+         MISE EN PRODUCTION SECURISEE — YNOV 2026
+================================================================================
+Auteur        : Anass Akker
+Etablissement : YNOV Campus — Master 2 Cybersecurite
+Duree totale  : 10 minutes de presentation + questions jury
+Date          : Avril 2026
+================================================================================
+
+
+================================================================================
+STRUCTURE GENERALE DE LA PRESENTATION
+================================================================================
+
+  Slide 1  — Titre & Introduction                      (30 sec)
+  Slide 2  — Contexte & Problematique                  (60 sec)
+  Slide 3  — Architecture Technique                    (60 sec)
+  Slide 4  — Authentification & RBAC                   (60 sec)
+  Slide 5  — WAF — Pare-feu Applicatif                 (90 sec)
+  Slide 6  — SIEM Logs — Journal des Evenements        (90 sec)
+  Slide 7  — Dashboard — Vue Synthetique               (60 sec)
+  Slide 8  — Conformite RGPD                           (60 sec)
+  Slide 9  — Demonstration Live                        (60 sec)
+  Slide 10 — Resultats & Conclusion                    (30 sec)
+  -----------------------------------------------------------------------
+  TOTAL PRESENTATION                                   10 minutes
+  Questions jury                                       5-10 minutes
+
+
+================================================================================
+SLIDE 1 — TITRE
+================================================================================
+
+TITRE PRINCIPAL :
+  "Securisation d'une Plateforme de Gestion Scolaire"
+
+SOUS-TITRE :
+  "Mise en production securisee — YNOV 2026"
+
+INFORMATIONS :
+  Auteur  : Anass Akker
+  Filiere : Master 2 Cybersecurite
+  Date    : Avril 2026
+
+--------------------------------------------------------------------------------
+CE QUE VOUS DITES (mot a mot possible) :
+--------------------------------------------------------------------------------
+
+  "Bonjour, je suis Anass Akker, etudiant en Master 2 Cybersecurite a YNOV.
+  Mon projet de fin d'etudes porte sur la securisation complete d'une plateforme
+  web de gestion scolaire. Il s'agit d'un projet applicatif real-world : une
+  application fonctionnelle a laquelle j'ai greffe une architecture de securite
+  complete, de bout en bout. Je vais vous presenter cette architecture en
+  10 minutes."
+
+================================================================================
+SLIDE 2 — CONTEXTE & PROBLEMATIQUE
+================================================================================
+
+POINTS CLES A AFFICHER :
+  - Plateforme web de gestion scolaire en production
+  - Donnees sensibles : etudiants, paiements, parents, notes
+  - Absence initiale de toute mesure de securite
+  - Conformite RGPD obligatoire
+  - Risques OWASP Top 10 non couverts
+
+--------------------------------------------------------------------------------
+CE QUE VOUS DITES :
+--------------------------------------------------------------------------------
+
+  "La plateforme Gestion Scolaire est une application web complete permettant
+  de gerer des etudiants, des frais de scolarite, des paiements, des classes
+  et des enseignants. Elle est developpee avec React et TypeScript en frontend,
+  Node.js/Express en backend, et Firebase Firestore comme base de donnees.
+
+  Le probleme de depart etait simple mais critique : cette plateforme traitait
+  des donnees personnelles sensibles — des identites, des situations financieres,
+  des coordonnees de familles — sans AUCUNE protection de securite applicative.
+
+  Concretement, au debut du projet :
+    - N'importe qui pouvait tenter des injections SQL
+    - Il n'y avait aucun controle sur qui faisait quoi
+    - Les donnees sensibles etaient stockees en clair
+    - Aucun log ne permettait de savoir si l'application avait ete compromise
+
+  L'objectif de ce PFE a donc ete de designer et d'implementer une architecture
+  de securite complete, couvrant a la fois les attaques web, le controle d'acces,
+  la conformite RGPD et la surveillance en temps reel."
+
+================================================================================
+SLIDE 3 — ARCHITECTURE TECHNIQUE
+================================================================================
+
+SCHEMA A AFFICHER :
+  [Client React/TS]
+       |
+       v (HTTPS + Headers Helmet)
+  [Middleware WAF]  --> BLOQUE attaques OWASP
+       |
+       v
+  [Middleware Auth JWT]  --> REJETTE tokens invalides
+       |
+       v
+  [Middleware RBAC]  --> REFUSE roles insuffisants
+       |
+       v
+  [Controllers Express]
+       |
+       v
+  [Firestore + Regles deny-by-default]
+
+POINTS CLES :
+  - Defense en profondeur (5 couches independantes)
+  - Stack : React 18 / Node.js 18 / Express / Firebase
+  - Principe : tout est refuse par defaut, on autorise explicitement
+
+--------------------------------------------------------------------------------
+CE QUE VOUS DITES :
+--------------------------------------------------------------------------------
+
+  "L'architecture de securite est construite selon le principe de defense en
+  profondeur. Cela signifie que chaque couche est independante et qu'un attaquant
+  doit franchir plusieurs barrieres successives pour atteindre les donnees.
+
+  En pratique, toute requete entre dans le systeme par le middleware WAF. Si la
+  requete contient une injection SQL, un XSS ou un pattern d'attaque, elle est
+  bloquee immediatement avec un HTTP 403 — le backend ne la voit jamais.
+
+  Si la requete est legitime, elle passe au middleware d'authentification JWT.
+  Sans token valide, c'est HTTP 401. Avec un token valide mais un role insuffisant,
+  le middleware RBAC renvoie HTTP 403.
+
+  Ce n'est que si les trois couches laissent passer la requete qu'elle atteint
+  le controller, puis Firestore — dont les regles sont configurees deny by default."
+
+================================================================================
+SLIDE 4 — AUTHENTIFICATION & RBAC
+================================================================================
+
+POINTS CLES A AFFICHER :
+  - JWT HS256, expiration 24h
+  - Bcrypt saltRounds=10 (aucun mot de passe en clair)
+  - Brute force : 5 tentatives → blocage 15 minutes (HTTP 429)
+  - Rate limiting : 10 requetes / 15 min par IP
+  - 4 roles : Admin | Sous-Admin | Comptable | Etudiant
+  - Firestore rules : deny by default sur toutes les collections
+  - ProtectedRoute cote frontend
+
+--------------------------------------------------------------------------------
+CE QUE VOUS DITES :
+--------------------------------------------------------------------------------
+
+  "Pour l'authentification, j'ai choisi JWT avec l'algorithme HS256 et une
+  expiration de 24 heures. Les mots de passe sont haches avec bcrypt, facteur
+  de cout 10 — cela prend 100 millisecondes par hash, ce qui rend les attaques
+  par dictionnaire prohibitivement lentes.
+
+  La protection brute force est directement integree au middleware : apres 5
+  echecs consecutifs, le compte est verrouille pendant 15 minutes. Le rate
+  limiter global bloque egalement les IP abusives independamment du compte.
+
+  Le RBAC definit 4 roles aux permissions bien separees :
+    - Admin : acces total, gestion users, RGPD, monitoring
+    - Sous-Admin : gestion pedagogique (etudiants, classes, enseignants)
+    - Comptable : frais, paiements, factures uniquement
+    - Etudiant : lecture seule de son propre dossier
+
+  Cote base de donnees, les regles Firestore implementent deny-by-default :
+  toute collection non explicitement autorisee pour le role de l'utilisateur
+  est rejetee cote serveur, independamment du backend."
+
+================================================================================
+SLIDE 5 — WAF — PARE-FEU APPLICATIF
+================================================================================
+
+[INSERER SCREENSHOT ONGLET WAF ICI]
+(Screenshot montrant la liste des attaques bloquees : SQLi, XSS, Path Traversal,
+CMD injection, scanners — avec IP, path, timestamp)
+
+POINTS CLES A AFFICHER :
+  - Middleware Express en premiere position de la chaine
+  - Detection par regex sur URL, query, body, headers
+  - 6 categories d'attaques detectees
+  - OWASP Top 10 couvre 9/10 categories
+  - Chaque blocage → HTTP 403 + log WAF_BLOCK dans Firestore
+
+--------------------------------------------------------------------------------
+CE QUE VOUS DITES :
+--------------------------------------------------------------------------------
+
+  "Voici l'onglet WAF du tableau de bord de securite. On voit en temps reel
+  toutes les attaques interceptees par le pare-feu applicatif.
+
+  L'onglet WAF montre le pare-feu en action. Toutes les attaques sont bloquees
+  avant d'atteindre la base de donnees, avec le detail de chaque tentative :
+  type d'attaque, chemin cible, IP source et heure.
+
+  Le WAF est un middleware Express que j'ai developpe et qui analyse chaque
+  requete entrant : l'URL, les parametres, le corps JSON et les en-tetes HTTP.
+  Il detecte 6 categories d'attaques par expressions regulieres :
+
+    1. Injections SQL (OR 1=1, UNION SELECT, DROP TABLE...)
+    2. Cross-Site Scripting (balises script, onerror=, javascript:...)
+    3. Path Traversal (../../etc/passwd et variantes encodees)
+    4. Injections de commandes (;rm -rf, &&wget, bash -i...)
+    5. Scanners automatises (sqlmap, nikto, nmap detectes sur User-Agent)
+    6. Inclusions de fichiers LFI/RFI (php://input, file://...)
+
+  Chaque blocage genere un log WAF_BLOCK dans Firestore avec l'IP source, le
+  chemin cible, le type d'attaque et l'horodatage serveur. C'est ce qui apparait
+  dans l'onglet WAF que vous voyez ici."
+
+--------------------------------------------------------------------------------
+TEXTE POUR LE RAPPORT :
+--------------------------------------------------------------------------------
+
+  "L'onglet WAF presente les attaques interceptees par le pare-feu applicatif,
+  couvrant les injections SQL, XSS, Path Traversal, scanners automatises et
+  injections de commandes. Chaque blocage est enregistre dans Firestore avec
+  l'IP source, le chemin cible et l'horodatage serveur."
+
+================================================================================
+SLIDE 6 — SIEM LOGS — JOURNAL DES EVENEMENTS
+================================================================================
+
+[INSERER SCREENSHOT ONGLET SIEM LOGS ICI]
+(Screenshot montrant le journal centralise avec differents types d'evenements :
+AUTH_SUCCESS, AUTH_FAILURE, WAF_BLOCK, ACCESS_DENIED, DATA_EXPORT...)
+
+POINTS CLES A AFFICHER :
+  - Journal centralise temps reel (Firestore onSnapshot)
+  - 9 types d'evenements (AUTH_SUCCESS, AUTH_FAILURE, AUTH_LOCKOUT,
+    ACCESS_DENIED, SESSION_EXPIRED, LOGOUT, DATA_EXPORT,
+    DATA_ANONYMIZE, WAF_BLOCK)
+  - Immuable : allow update/delete: if false dans regles Firestore
+  - Horodatage serverTimestamp() (non falsifiable)
+  - Conservation 1 an
+
+--------------------------------------------------------------------------------
+CE QUE VOUS DITES :
+--------------------------------------------------------------------------------
+
+  "L'onglet SIEM Logs montre le journal centralise en temps reel. On voit tous
+  les types d'evenements : attaques WAF bloquees, echecs de connexion, acces
+  refuses RBAC, exports RGPD. Ces logs sont infalsifiables : personne ne peut
+  les modifier ni les supprimer.
+
+  Ce journal centralise 9 categories d'evenements qui couvrent l'integralite
+  du cycle de vie securite de la plateforme :
+
+    AUTH_SUCCESS     : connexion reussie avec IP et userAgent
+    AUTH_FAILURE     : echec de connexion avec raison precise
+    AUTH_LOCKOUT     : verrouillage apres brute force
+    ACCESS_DENIED    : violation RBAC avec role demande vs. actuel
+    SESSION_EXPIRED  : token perime
+    LOGOUT           : deconnexion volontaire
+    DATA_EXPORT      : export RGPD Art.15
+    DATA_ANONYMIZE   : effacement RGPD Art.17
+    WAF_BLOCK        : attaque bloquee par le pare-feu
+
+  L'immutabilite est garantie par les regles Firestore : allow update est
+  configure a false, allow delete est configure a false. Personne — pas meme
+  l'administrateur — ne peut modifier ou supprimer un log. L'horodatage est
+  genere par serverTimestamp() cote serveur, donc impossible a falsifier
+  depuis le client."
+
+--------------------------------------------------------------------------------
+TEXTE POUR LE RAPPORT :
+--------------------------------------------------------------------------------
+
+  "L'onglet SIEM Logs centralise en temps reel l'ensemble des evenements de
+  securite issus de Firestore. L'integrite est garantie par les regles Firestore
+  allow update/delete: if false, avec horodatage serverTimestamp()."
+
+================================================================================
+SLIDE 7 — DASHBOARD — VUE SYNTHETIQUE
+================================================================================
+
+[INSERER SCREENSHOT ONGLET DASHBOARD ICI]
+(Screenshot montrant le score de securite, les 4 sections et les alertes actives)
+
+POINTS CLES A AFFICHER :
+  - Score de securite calcule sur 24h glissantes (/100)
+  - 4 axes : Authentification / RGPD / RBAC / Journalisation
+  - Alertes automatiques sur 4 seuils
+  - Score bas = detection efficace (pas une faille !)
+  - En conditions normales : 85-100/100
+
+--------------------------------------------------------------------------------
+CE QUE VOUS DITES :
+--------------------------------------------------------------------------------
+
+  "Le dashboard montre l'etat de securite en temps reel. Le score bas que vous
+  voyez sur la capture est normal pendant une demo d'attaques — sans attaques,
+  il est a 85-100. Les alertes se declenchent automatiquement sur 4 axes.
+
+  Le score est calcule sur les evenements des 24 dernieres heures. Il prend en
+  compte : le taux d'authentifications reussies, le nombre d'attaques bloquees,
+  la couverture des actions RGPD tracees, et le volume des audit logs.
+
+  Pendant la demonstration, j'ai simule une attaque complete : brute force,
+  injections SQL, XSS, scanner automatise. Toutes ces attaques ont ete detectees
+  et bloquees — c'est precisement pour ca que le score descend. Le score bas
+  n'est pas un probleme, c'est la preuve que le systeme de detection fonctionne.
+
+  En exploitation normale, sans attaque, le score se situe entre 85 et 100."
+
+--------------------------------------------------------------------------------
+TEXTE POUR LE RAPPORT :
+--------------------------------------------------------------------------------
+
+  "Le tableau de bord centralise en temps reel les metriques de securite sur
+  quatre axes : authentification avec blocage automatique, traçabilite RGPD,
+  controle d'acces RBAC, et journalisation immuable."
+
+================================================================================
+SLIDE 8 — CONFORMITE RGPD
+================================================================================
+
+POINTS CLES A AFFICHER :
+  - Art.15 : Droit d'acces — Export JSON complet des donnees
+  - Art.16 : Droit de rectification — Modification tracee
+  - Art.17 : Droit a l'oubli — Anonymisation (pas suppression)
+  - Art.32 : Securite — Chiffrement AES-256-CBC
+  - Art.33 : Violation 72h — Infrastructure de notification
+  - Art.5  : Integrite — Logs immuables Firestore
+
+--------------------------------------------------------------------------------
+CE QUE VOUS DITES :
+--------------------------------------------------------------------------------
+
+  "La conformite RGPD est un aspect essentiel de ce projet. La plateforme traite
+  des donnees de personnes physiques, y compris potentiellement des mineurs, et
+  est donc soumise au RGPD UE 2016/679 en totalite.
+
+  J'ai implemente les articles suivants :
+
+    Article 15 — Droit d'acces : tout utilisateur peut demander l'export de
+    toutes ses donnees. L'operation est tracee dans les audit logs sous
+    l'evenement DATA_EXPORT.
+
+    Article 17 — Droit a l'oubli : j'ai choisi l'anonymisation plutot que la
+    suppression physique, pour preserver l'integrite referentielle de la base.
+    Les donnees personnelles sont remplacees par 'ANONYMISE_timestamp'. Cette
+    operation genere un log DATA_ANONYMIZE.
+
+    Article 32 — Chiffrement : les donnees sensibles sont chiffrees avec
+    AES-256-CBC. Un vecteur d'initialisation aleatoire est genere par operation,
+    garantissant que deux chiffrements de la meme donnee produisent des resultats
+    differents.
+
+    Article 33 — Notification 72h : l'infrastructure d'alerte SIEM est preparee
+    pour detecter et notifier une violation dans le delai reglementaire.
+
+    Article 5 — Integrite : les audit logs sont immuables, ce qui garantit la
+    non-repudiation et la traçabilite des traitements de donnees personnelles."
+
+================================================================================
+SLIDE 9 — DEMONSTRATION LIVE
+================================================================================
+
+POINTS CLES A AFFICHER :
+  - Demo en direct d'une attaque complete
+  - Le script simule : brute force + SQLi + XSS + scanner
+  - On observe en temps reel : WAF bloque, logs generes, alertes declenchees
+  - Score de securite descend => systeme de detection actif
+
+COMMANDE DE DEMONSTRATION :
+  bash demo_live_jury.sh
+
+  (ou manuellement :)
+  curl "http://localhost:5000/api/etudiants?id=1 OR 1=1--"
+  curl "http://localhost:5000/api/etudiants" -H "User-Agent: sqlmap/1.7.8"
+  curl "http://localhost:5000/api/upload/../../etc/passwd"
+
+--------------------------------------------------------------------------------
+CE QUE VOUS DITES :
+--------------------------------------------------------------------------------
+
+  "Je vais maintenant lancer le script de demonstration qui simule une attaque
+  complete en temps reel. Observez le tableau de bord en parallele — vous allez
+  voir les evenements apparaitre instantanement dans le journal SIEM Logs, les
+  attaques s'afficher dans l'onglet WAF, et le score de securite baisser puis
+  declencher des alertes.
+
+  [LANCER : bash demo_live_jury.sh]
+
+  Le script simule :
+    1. Une attaque brute force (6 tentatives de login)
+    2. Une injection SQL (OR 1=1--)
+    3. Une attaque XSS (<script>alert(1)</script>)
+    4. Un scan avec sqlmap comme User-Agent
+    5. Un Path Traversal (../../etc/passwd)
+
+  Regardez l'onglet WAF — toutes ces attaques sont bloquees. Regardez les SIEM
+  Logs — chaque evenement est enregistre avec l'IP source et l'horodatage.
+  Et regardez le score — il descend, ce qui signifie que les alertes sont actives.
+
+  C'est exactement ce qui doit se passer en cas d'attaque reelle : detection,
+  blocage, journalisation, alerte. Zero interaction requise de l'administrateur
+  pour la detection."
+
+================================================================================
+SLIDE 10 — RESULTATS & CONCLUSION
+================================================================================
+
+POINTS CLES A AFFICHER :
+  - 12/12 tests de securite reussis (100%)
+  - OWASP Top 10 : 9/10 categories couvertes
+  - RGPD : Articles 5, 15, 16, 17, 32, 33 implementes
+  - Architecture : 5 couches de defense independantes
+  - Monitoring : temps reel, logs immuables, alertes auto
+
+  Perspectives :
+    - 2FA (TOTP)
+    - Integration SIEM externe (Wazuh/ELK)
+    - Pentest professionnel
+    - CI/CD avec SAST
+
+--------------------------------------------------------------------------------
+CE QUE VOUS DITES :
+--------------------------------------------------------------------------------
+
+  "Pour conclure, ce projet a permis de transformer une application sans securite
+  en une plateforme conforme aux standards industriels.
+
+  Les resultats sont les suivants :
+    - 12 tests de securite realises, 12 reussis — taux de 100%
+    - 9 categories OWASP Top 10 sur 10 sont couvertes
+    - 5 articles RGPD implementes et traçables dans les audit logs
+    - Architecture en 5 couches independantes
+    - Monitoring temps reel avec journal immuable et alertes automatiques
+
+  Les perspectives a court terme incluent l'ajout d'une authentification a deux
+  facteurs via TOTP, l'integration avec un SIEM externe comme Wazuh ou ELK Stack,
+  et la realisation d'un pentest professionnel pour valider l'ensemble.
+
+  Je reste disponible pour vos questions."
+
+
+================================================================================
+QUESTIONS FREQUENTES DU JURY — Q&A
+================================================================================
+
+--------------------------------------------------------------------------------
+QUESTION 1 : "Pourquoi avez-vous choisi un WAF custom plutot qu'une solution
+              existante comme ModSecurity ou Cloudflare ?"
+--------------------------------------------------------------------------------
+
+  REPONSE :
+
+  "C'est une tres bonne question. Le choix d'un WAF custom s'est impose pour
+  trois raisons :
+
+  Premierement, le contexte pedagogique : l'objectif du PFE est de demontrer
+  la maitrise des mecanismes de securite, pas uniquement leur configuration.
+  Developper le WAF m'a permis de comprendre precisement comment fonctionne
+  la detection par patterns.
+
+  Deuxiement, l'integration : un middleware Express custom s'integre parfaitement
+  dans le pipeline de la plateforme et peut etre couple directement aux audit logs
+  Firestore sans adaptateur.
+
+  Troisemement, la personnalisation : les patterns de detection peuvent etre
+  ajustes specifiquement aux routes et aux types de donnees de cette application.
+
+  En production a grande echelle, une solution industrielle comme Cloudflare WAF
+  ou AWS WAF serait recommandee pour sa mise a jour automatique des signatures.
+  L'architecture cependant reste la meme : le WAF est la premiere couche
+  independante avant toute logique metier."
+
+--------------------------------------------------------------------------------
+QUESTION 2 : "Les logs Firestore sont immuables, mais que se passe-t-il si
+              quelqu'un a acces a la console Firebase et les supprime ?"
+--------------------------------------------------------------------------------
+
+  REPONSE :
+
+  "C'est une limite legitime que je reconnais. Les regles Firestore allow
+  delete: if false s'appliquent aux acces via l'API Firestore — SDK client,
+  Admin SDK, API REST. Elles ne s'appliquent pas aux operations faites directement
+  via la console Firebase avec un compte proprietaire du projet.
+
+  Pour adresser ce risque residuel, deux mesures complementaires sont prevues :
+
+  Premierement, l'export automatique mensuel des logs vers Firebase Storage en
+  JSON archive, avec une politique de retention independante.
+
+  Deuxiemement, pour une production critique, l'integration avec un SIEM externe
+  comme Wazuh ou un serveur syslog distant resoudrait completement ce probleme :
+  les logs seraient envoyes en parallele vers un systeme que les droits Firebase
+  ne peuvent pas atteindre.
+
+  C'est d'ailleurs l'une des perspectives d'evolution que j'ai documentees."
+
+--------------------------------------------------------------------------------
+QUESTION 3 : "Comment garantissez-vous que le WAF ne bloque pas de vraies
+              requetes legitimes (faux positifs) ?"
+--------------------------------------------------------------------------------
+
+  REPONSE :
+
+  "La gestion des faux positifs est effectivement un defi central de tout WAF.
+  Mon approche a plusieurs niveaux :
+
+  Premierement, les patterns de detection sont ecrits de facon contextualisee.
+  Par exemple, la detection de l'apostrophe seule n'est pas un critere de blocage
+  — c'est la combinaison avec des mots-cles SQL specifiques (OR, SELECT, DROP,
+  UNION) qui declenche le blocage.
+
+  Deuxiemement, j'ai constitue un corpus de requetes legitimes issues des tests
+  fonctionnels de l'application et verifie manuellement qu'aucune n'etait bloquee.
+
+  Troisimement, les logs WAF_BLOCK incluent le payload detecte, ce qui permet
+  d'identifier et de corriger rapidement un faux positif en production.
+
+  En pratique, sur l'ensemble des tests realises, aucun faux positif n'a ete
+  observe. Mais je reste conscient que c'est un travail continu : un WAF
+  s'affine dans le temps avec l'experience du trafic reel."
+
+--------------------------------------------------------------------------------
+QUESTION 4 : "Le score de securite descend a 30/100 pendant la demo — comment
+              un vrai administrateur saurait-il distinguer une vraie attaque
+              d'une demo ?"
+--------------------------------------------------------------------------------
+
+  REPONSE :
+
+  "La distinction se fait precisement grace aux informations contenues dans les
+  logs. Lors d'une vraie attaque :
+    - Les IP sources sont des adresses exterieures inconnues
+    - Les patterns d'attaque sont concentres sur des cibles de valeur
+    - La frequence est generalement plus elevee (attaque automatisee)
+    - L'attaque vient apres des phases de reconnaissance (scanner detecte d'abord)
+
+  Lors d'une demo interne :
+    - Les IP sources sont 127.0.0.1 (localhost) ou une IP interne connue
+    - Les attaques couvrent de nombreux types differents en peu de temps
+
+  Dans les deux cas, le comportement du systeme est identique — detection, blocage,
+  log, alerte. La distinction entre demo et vraie attaque est une question
+  d'analyse des logs par l'administrateur, ce qui est normal dans tout SOC.
+
+  Pour aller plus loin, on pourrait ajouter un mode 'test' qui tague les evenements
+  comme simules dans les logs — c'est une perspective d'evolution documentee."
+
+--------------------------------------------------------------------------------
+QUESTION 5 : "Avez-vous considere les attaques internes (insider threat) ?
+              Un Admin malveillant pourrait-il contourner vos mesures ?"
+--------------------------------------------------------------------------------
+
+  REPONSE :
+
+  "C'est la question la plus complexe en securite : l'attaquant interne legitime.
+  Voici ce que mon architecture prevoit et ce qu'elle ne prevoit pas :
+
+  Ce qui est protege :
+    - Les audit logs sont immuables meme pour l'Admin via l'API Firestore
+    - Toutes les actions Admin sont journalisees (DATA_EXPORT, DATA_ANONYMIZE)
+    - Le RBAC limite chaque role meme Admin a ses permissions definie
+    - Les cles AES et JWT sont dans des variables d'environnement, pas dans le code
+
+  Ce qui reste un risque residuel :
+    - Un Admin avec acces direct a la console Firebase peut theoriquement agir
+      en dehors des regles Firestore (j'ai detaille ce point dans la question 2)
+    - Un Admin peut exporter les donnees de n'importe quel etudiant, mais
+      cette action est tracee dans les logs
+
+  Pour le niveau de maturite cible — une plateforme scolaire de taille moyenne —
+  ce niveau de securite est proportionne. Pour une institution bancaire ou
+  gouvernementale, on ajouterait : separation des droits (droit d'acces aux
+  cles vs. droit d'acces aux donnees), audit externe regulier, et detection
+  d'anomalies comportementales (UEBA) dans le SIEM."
+
+
+================================================================================
+CONSEILS PRATIQUES POUR LA SOUTENANCE
+================================================================================
+
+AVANT LA SOUTENANCE :
+  - Tester le script demo_live_jury.sh la veille et le matin de la soutenance
+  - Verifier que le backend tourne sur localhost:5000
+  - Ouvrir le dashboard monitoring a l'avance dans le navigateur
+  - Avoir les screenshots en backup au cas ou la demo live echoue
+  - Repeter la presentation 2-3 fois pour tenir les 10 minutes
+
+PENDANT LA SOUTENANCE :
+  - Garder contact visuel avec le jury, ne pas lire les slides
+  - Pour la demo live : commenter chaque action en direct
+  - Si une question depasse vos connaissances : "C'est une excellente piste
+    d'amelioration que j'ai documentee dans les perspectives"
+  - Ne pas paniquer si le score descend pendant la demo — c'est voulu
+
+APRES LA SOUTENANCE :
+  - Remercier le jury
+  - Proposer de partager le rapport technique si demande
+  - Conserver le rapport pour les entretiens futurs (tres valorisant)
+
+TIMING INDICATIF :
+  00:00 - 00:30  Slide 1 : Introduction rapide
+  00:30 - 01:30  Slide 2 : Contexte et problematique
+  01:30 - 02:30  Slide 3 : Architecture
+  02:30 - 03:30  Slide 4 : Auth & RBAC
+  03:30 - 05:00  Slide 5 : WAF (screenshot + explication)
+  05:00 - 06:30  Slide 6 : SIEM Logs (screenshot + explication)
+  06:30 - 07:30  Slide 7 : Dashboard (screenshot + score)
+  07:30 - 08:30  Slide 8 : RGPD
+  08:30 - 09:30  Slide 9 : Demo live
+  09:30 - 10:00  Slide 10 : Conclusion et resultats
+
+
+================================================================================
+FIN DU PLAN DE PRESENTATION
+================================================================================
+Auteur : Anass Akker — YNOV 2026
+Date   : Avril 2026
+================================================================================

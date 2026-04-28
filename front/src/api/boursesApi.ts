@@ -35,7 +35,6 @@ export const getBoursePercentages = async (): Promise<number[]> => {
     const response = await apiRequest("/bourses/percentages", "GET");
     return response.data || [];
   } catch (error) {
-    console.error("Erreur lors de la récupération des pourcentages:", error);
     // Fallback vers les pourcentages par défaut
     return [25, 50, 60];
   }
@@ -47,7 +46,6 @@ export const getAllBourses = async (): Promise<Bourse[]> => {
     const response = await apiRequest("/bourses", "GET");
     return response.data || [];
   } catch (error) {
-    console.error("Erreur lors de la récupération des bourses:", error);
     return [];
   }
 };

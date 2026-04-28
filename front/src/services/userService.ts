@@ -73,14 +73,23 @@ export const userService = {
   },
 
   // Gestion utilisateurs
-  getAllUsers: async (params?: { status?: string; role?: string }) => {
+  getAllUsers: async (params?: {
+    status?: string;
+    role?: string;
+    limit?: number;
+  }) => {
     const queryParams = new URLSearchParams();
     if (params?.status) queryParams.append("status", params.status);
     if (params?.role) queryParams.append("role", params.role);
+    if (params?.limit) queryParams.append("limit", String(params.limit));
 
     const queryString = queryParams.toString();
     const url = queryString ? `/users?${queryString}` : "/users";
     return await apiRequest(url, "GET");
+  },
+
+  getUserStats: async () => {
+    return await apiRequest("/users/stats", "GET");
   },
 
   getPendingUsers: async () => {

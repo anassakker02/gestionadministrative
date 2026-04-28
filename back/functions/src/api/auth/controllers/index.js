@@ -528,14 +528,8 @@ class UserController {
           status: userData.status || "pending",
           updatedAt: new Date(),
         });
-        // Return more detailed error information for debugging (local/dev)
         return res.status(500).json({
-          message: `Erreur lors de la création de l'entité ${role}: ${
-            entityError.message || String(entityError)
-          }`,
-          detail: entityError.message || String(entityError),
-          detailStack:
-            entityError && entityError.stack ? entityError.stack : null,
+          message: "Erreur lors de la création de l'entité. Contactez l'administrateur.",
           status: false,
         });
       }

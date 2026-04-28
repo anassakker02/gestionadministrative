@@ -1,0 +1,50 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ─── Documents des étudiants (bulletins, contrats, justificatifs) ──────────
+    match /documents/{userId}/{filename} {
+      // Lecture : propriétaire ou staff authentifié
+      allow read: if request.auth != null
+                  && (request.auth.uid == userId
+                      || isStaffToken());
+
+      // Écriture : propriétaire uniquement
+      // MIME whitelist : PDF, JPEG, PNG — max 5 Mo
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource.contentType.matches('application/pdf|image/jpeg|image/png|image/jpg')
+                   && request.resource.size <= 5 * 1024 * 1024;
+
+      // Suppression : propriétaire uniquement
+      allow delete: if request.auth != null
+                    && request.auth.uid == userId;
+    }
+
+    // ─── Exports (CSV, Excel, PDF générés) ────────────────────────────────────
+    match /exports/{filename} {
+      allow read: if request.auth != null && isStaffToken();
+      allow write: if request.auth != null && isStaffToken();
+      allow delete: if request.auth != null && isAdminToken();
+    }
+
+    // ─── Backups ──────────────────────────────────────────────────────────────
+    match /backups/{filename} {
+      allow read, write, delete: if request.auth != null && isAdminToken();
+    }
+
+    // ─── Deny-by-default ──────────────────────────────────────────────────────
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+// Helpers — token claims (à configurer via Firebase Auth Custom Claims côté backend)
+function isStaffToken() {
+  return request.auth.token.role in ['admin', 'sous-admin', 'comptable', 'enseignant'];
+}
+
+function isAdminToken() {
+  return request.auth.token.role == 'admin';
+}

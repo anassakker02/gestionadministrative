@@ -7,7 +7,7 @@ const bodyParser = require('body-parser');
 app.use(bodyParser.json());
 
 app.use(express.json());
-const routes = require('./src/routes/index');
+const routes = require('./functions/src/api/index');
 
 app.use(express.static(path.join(__dirname)));
 
@@ -39,7 +39,7 @@ app.use('/api', routes);
 
 
 
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port http://localhost:${PORT}`);
 });

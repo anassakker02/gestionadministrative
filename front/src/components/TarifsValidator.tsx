@@ -28,9 +28,7 @@ const TarifsValidator: React.FC = () => {
   const { data: tarifsData } = useQuery({
     queryKey: ['tarifs-validator'],
     queryFn: getTarifs,
-  });
-
-  console.log('Tarifs data in validator:', tarifsData); // Debug
+  }); // Debug
 
   const { data: classesData } = useQuery({
     queryKey: ['classes-validator'],

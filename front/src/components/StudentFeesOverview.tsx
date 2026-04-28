@@ -55,9 +55,7 @@ const StudentFeesOverview: React.FC<StudentFeesOverviewProps> = ({ className }) 
   const { data: tarifsData } = useQuery({
     queryKey: ['tarifs-fees-overview'],
     queryFn: getTarifs,
-  });
-
-  console.log('Tarifs data:', tarifsData); // Debug pour voir le format des données
+  }); // Debug pour voir le format des données
 
   const { data: paymentsData } = useQuery({
     queryKey: ['payments-fees-overview'],

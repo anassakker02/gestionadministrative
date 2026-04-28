@@ -14,10 +14,11 @@ const verifyWebhookSignature = (req, res, next) => {
     // Retrieve the webhook secret from your database based on the webhookId or other identifier
     // For now, we'll use a placeholder. In a real application, you'd fetch this from `webhookSubscriptions` collection.
     // const expectedSecret = getSecretForWebhook(webhookId);
-    const expectedSecret = process.env.WEBHOOK_GLOBAL_SECRET || 'supersecretkey'; // Placeholder
+    const expectedSecret = process.env.WEBHOOK_GLOBAL_SECRET;
 
     if (!expectedSecret) {
-        return res.status(401).send('Webhook secret not found.');
+        console.error("[SECURITY] WEBHOOK_GLOBAL_SECRET manquant dans les variables d'environnement.");
+        return res.status(500).json({ status: false, message: "Configuration serveur incorrecte." });
     }
 
     // Re-generate the signature with the expected secret and incoming payload
@@ -25,10 +26,17 @@ const verifyWebhookSignature = (req, res, next) => {
     hmac.update(JSON.stringify(req.body));
     const generatedSignature = hmac.digest('hex');
 
-    if (generatedSignature === signature) {
-        next();
-    } else {
-        res.status(403).send('Invalid webhook signature.');
+    // Comparaison en temps constant — évite les timing attacks
+    try {
+        const sigBuffer = Buffer.from(signature, "hex");
+        const genBuffer = Buffer.from(generatedSignature, "hex");
+        if (sigBuffer.length === genBuffer.length && crypto.timingSafeEqual(sigBuffer, genBuffer)) {
+            next();
+        } else {
+            res.status(403).json({ status: false, message: "Signature webhook invalide." });
+        }
+    } catch {
+        res.status(403).json({ status: false, message: "Signature webhook invalide." });
     }
 };
 

@@ -3,22 +3,21 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, UserPlus, Shield, UserCheck, Bug, User } from "lucide-react";
+import { Users, UserPlus, Shield, UserCheck, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import CreateSubAdminForm from "@/components/CreateSubAdminForm";
 import CreateParentForm from "@/components/CreateParentForm";
 import UserManagement from "@/components/UserManagement";
-import UserRoleDebug from "@/components/UserRoleDebug";
 import { userService } from "@/services/userService";
 
 interface DashboardStats {
   totalUsers: number;
-  pendingUsers: number;
   admins: number;
   subAdmins: number;
   enseignants: number;
   parents: number;
   etudiants: number;
+  actifs: number;
 }
 
 const AdminDashboard = () => {
@@ -44,23 +43,20 @@ const AdminDashboard = () => {
   const { user, isAdmin, isSubAdmin, canManageUsers } = authContext;
   const [activeTab, setActiveTab] = useState("users");
 
-  const { data: usersData, isLoading: usersLoading } = useQuery({
-    queryKey: ["all-users-dashboard"],
-    queryFn: () => userService.getAllUsers(),
+  const { data: usersStatsData, isLoading: usersLoading } = useQuery({
+    queryKey: ["users-dashboard-stats"],
+    queryFn: () => userService.getUserStats(),
     enabled: canManageUsers,
   });
 
-  const users = Array.isArray(usersData?.data) ? usersData.data : [];
-  const stats = {
-    totalUsers: users.length,
-    admins: users.filter((u) => u.role === "admin").length,
-    subAdmins: users.filter((u) => u.role === "sub-admin").length,
-    enseignants: users.filter((u) => u.role === "enseignant").length,
-    parents: users.filter((u) => u.role === "parent").length,
-    etudiants: users.filter(
-      (u) => u.role === "etudiant" || u.role === "student",
-    ).length,
-    actifs: users.filter((u) => u.isActive).length,
+  const stats: DashboardStats = usersStatsData?.data ?? {
+    totalUsers: 0,
+    admins: 0,
+    subAdmins: 0,
+    enseignants: 0,
+    parents: 0,
+    etudiants: 0,
+    actifs: 0,
   };
 
   if (!canManageUsers) {
@@ -193,13 +189,6 @@ const AdminDashboard = () => {
                 <span className="whitespace-nowrap">Créer Parent</span>
               </TabsTrigger>
             )}
-            <TabsTrigger
-              value="debug"
-              className="flex items-center gap-2 px-4 py-2"
-            >
-              <Bug className="h-4 w-4" />
-              <span className="whitespace-nowrap">Debug</span>
-            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -219,9 +208,6 @@ const AdminDashboard = () => {
           </TabsContent>
         )}
 
-        <TabsContent value="debug" className="space-y-4">
-          <UserRoleDebug />
-        </TabsContent>
       </Tabs>
 
       {/* Additional Stats by Role */}

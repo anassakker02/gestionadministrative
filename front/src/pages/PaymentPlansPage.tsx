@@ -61,7 +61,6 @@ const PaymentPlansPage: React.FC = () => {
         const plans = await paymentPlanService.getAllPaymentPlans();
         return Array.isArray(plans) ? plans : [];
       } catch (error) {
-        console.error("Erreur lors de la récupération des plans:", error);
         return [];
       }
     },
@@ -97,9 +96,6 @@ const PaymentPlansPage: React.FC = () => {
         return;
       }
 
-      console.log("Données du plan de paiement:", data);
-      console.log("Utilisateur connecté:", user);
-
       // Préparer les données pour l'API
       const planData = {
         name: `Plan de paiement - ${data.etudiant}`,
@@ -134,7 +130,6 @@ const PaymentPlansPage: React.FC = () => {
       setIsModalOpen(false);
       reset();
     } catch (error) {
-      console.error("Erreur lors de la création du plan:", error);
       toast({
         title: "Erreur",
         description:
@@ -181,7 +176,6 @@ const PaymentPlansPage: React.FC = () => {
             .split("T")[0];
         }
       } catch (error) {
-        console.error("Erreur lors du formatage de la date:", error);
       }
     }
     setValue("datePremierVersement", datePremierVersement);
@@ -214,8 +208,6 @@ const PaymentPlansPage: React.FC = () => {
         return;
       }
 
-      console.log("Suppression du plan de paiement:", planToDelete);
-
       // Appel API de suppression
       await paymentPlanService.deletePaymentPlan(planToDelete.id);
 
@@ -229,7 +221,6 @@ const PaymentPlansPage: React.FC = () => {
 
       setPlanToDelete(null);
     } catch (error) {
-      console.error("Erreur lors de la suppression du plan:", error);
       toast({
         title: "Erreur",
         description:
@@ -269,9 +260,6 @@ const PaymentPlansPage: React.FC = () => {
         return;
       }
 
-      console.log("Modification du plan de paiement:", data);
-      console.log("Plan sélectionné:", selectedPlan);
-
       // Préparer les données pour l'API de mise à jour
       const updatedPlanData = {
         name: `Plan de paiement - ${data.etudiant}`,
@@ -310,7 +298,6 @@ const PaymentPlansPage: React.FC = () => {
       setSelectedPlan(null);
       reset();
     } catch (error) {
-      console.error("Erreur lors de la modification du plan:", error);
       toast({
         title: "Erreur",
         description:
@@ -379,7 +366,6 @@ const PaymentPlansPage: React.FC = () => {
             .split("T")[0];
         }
       } catch (error) {
-        console.error("Erreur lors du formatage de la date:", error);
         datePremierVersement = "2025-09-24";
       }
     }
