@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "gestionadminastration"
+    "default": "frais-gestionscolaire",
+    "production": "frais-gestionscolaire",
+    "staging": "frais-gestionscolaire"
   }
 }
